@@ -109,6 +109,24 @@ local function InitDB()
     for k, v in pairs(ns.DEFAULT_OPTIONS) do
         if c.options[k] == nil then c.options[k] = v end
     end
+    -- Drop blessings that no longer exist (Salvation, Light, Sanctuary were
+    -- removed from WoW Forever) from saved assignments.
+    for key, list in pairs(c.assign) do
+        local clean = {}
+        for i = 1, ns.MAX_PRIORITY do
+            local b = list[i]
+            clean[i] = (b and ns.BLESSINGS[b]) and b or false
+        end
+        c.assign[key] = clean
+    end
+    for class, b in pairs(c.greater) do
+        if b and not ns.BLESSINGS[b] then c.greater[class] = nil end
+    end
+    for _, e in ipairs(g.customCamp) do
+        local keep = {}
+        for _, b in ipairs(e.conflicts or {}) do if ns.BLESSINGS[b] then keep[#keep + 1] = b end end
+        e.conflicts = keep
+    end
     ns.gdb, ns.db, ns.opt = g, c, c.options
 end
 
@@ -918,7 +936,7 @@ SlashCmdList.CAMELUSBETTERBLESSINGS = function(msg)
         elseif sub == "add" then
             local what, bless = args:match("^(.-)%s+(%S+)$")
             local b = ParseBlessing(bless)
-            if not what or what == "" or not b then Print("usage: /cbb camp add <spellId|aura name> <might|wisdom|kings|salvation|light|sanctuary>") return end
+            if not what or what == "" or not b then Print("usage: /cbb camp add <spellId|aura name> <might|wisdom|kings>") return end
             local entry = { key = "CUSTOM", conflicts = { b }, icon = "Interface\\Icons\\INV_Misc_QuestionMark" }
             local id = tonumber(what)
             if id then

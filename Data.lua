@@ -2,15 +2,17 @@
 -- Everything in here is plain data so it can be tuned without touching logic.
 local _, ns = ...
 
-ns.MAX_PRIORITY = 4
+ns.MAX_PRIORITY = 3
 
 ---------------------------------------------------------------------------
 -- Blessings
+-- WoW Forever has three: Might, Wisdom and Kings (Kings is baseline from
+-- level 20). Salvation, Light and Sanctuary were removed from the game.
 -- spellId / greaterId are the classic rank 1 IDs. They are only used to look
 -- up the localized name, the icon and "do I know this spell". English names
 -- are the fallback if an ID does not exist on the WoW Forever client.
 ---------------------------------------------------------------------------
-ns.BLESSING_ORDER = { "MIGHT", "WISDOM", "KINGS", "SALVATION", "LIGHT", "SANCTUARY" }
+ns.BLESSING_ORDER = { "MIGHT", "WISDOM", "KINGS" }
 
 ns.BLESSINGS = {
     MIGHT = {
@@ -33,27 +35,6 @@ ns.BLESSINGS = {
         spellId = 20217,                     greaterId = 25898,
         icon = "Interface\\Icons\\Spell_Magic_MageArmor",
         greaterIcon = "Interface\\Icons\\Spell_Magic_GreaterBlessingofKings",
-    },
-    SALVATION = {
-        short = "Salvation",
-        name = "Blessing of Salvation",      greaterName = "Greater Blessing of Salvation",
-        spellId = 1038,                      greaterId = 25895,
-        icon = "Interface\\Icons\\Spell_Holy_SealOfSalvation",
-        greaterIcon = "Interface\\Icons\\Spell_Holy_GreaterBlessingofSalvation",
-    },
-    LIGHT = {
-        short = "Light",
-        name = "Blessing of Light",          greaterName = "Greater Blessing of Light",
-        spellId = 19977,                     greaterId = 25890,
-        icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing02",
-        greaterIcon = "Interface\\Icons\\Spell_Holy_GreaterBlessingofLight",
-    },
-    SANCTUARY = {
-        short = "Sanctuary",
-        name = "Blessing of Sanctuary",      greaterName = "Greater Blessing of Sanctuary",
-        spellId = 20911,                     greaterId = 25899,
-        icon = "Interface\\Icons\\Spell_Nature_LightningShield",
-        greaterIcon = "Interface\\Icons\\Spell_Holy_GreaterBlessingofSanctuary",
     },
 }
 
@@ -168,18 +149,19 @@ ns.SPEC_NAME_ROLES = {
 -- gave it). Class+role entries win over the plain role entries.
 ---------------------------------------------------------------------------
 ns.DEFAULT_ROLE_PRIORITY = {
-    TANK   = { "KINGS", "MIGHT", "SANCTUARY", "LIGHT" },
-    HEALER = { "WISDOM", "KINGS", "LIGHT", "SALVATION" },
-    MELEE  = { "MIGHT", "KINGS", "SALVATION", "LIGHT" },
-    RANGED = { "KINGS", "WISDOM", "SALVATION", "LIGHT" },
-    CASTER = { "WISDOM", "KINGS", "SALVATION", "LIGHT" },
+    TANK   = { "KINGS", "MIGHT", false },
+    HEALER = { "WISDOM", "KINGS", false },
+    MELEE  = { "MIGHT", "KINGS", false },
+    RANGED = { "KINGS", "WISDOM", "MIGHT" },
+    CASTER = { "WISDOM", "KINGS", false },
 }
 
+-- Classes whose melee/tank spec also uses mana get Wisdom as the last resort.
 ns.DEFAULT_CLASS_ROLE_PRIORITY = {
-    ["PALADIN:TANK"]  = { "KINGS", "WISDOM", "SANCTUARY", "MIGHT" },
-    ["PALADIN:MELEE"] = { "MIGHT", "KINGS", "WISDOM", "SALVATION" },
-    ["SHAMAN:MELEE"]  = { "MIGHT", "KINGS", "WISDOM", "SALVATION" },
-    ["DRUID:TANK"]    = { "KINGS", "MIGHT", "SANCTUARY", "LIGHT" },
+    ["PALADIN:TANK"]  = { "KINGS", "WISDOM", "MIGHT" },
+    ["PALADIN:MELEE"] = { "MIGHT", "KINGS", "WISDOM" },
+    ["SHAMAN:MELEE"]  = { "MIGHT", "KINGS", "WISDOM" },
+    ["DRUID:MELEE"]   = { "MIGHT", "KINGS", "WISDOM" },
 }
 
 -- Default Greater Blessing per class (class-wide, so no role split possible).

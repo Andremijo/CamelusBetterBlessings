@@ -22,8 +22,10 @@ This addon handles that for you.
   row: Warrior Tank, Warrior Melee, Shaman Healer, Shaman Melee, Shaman Caster,
   Druid Tank, and so on. An Enhancement Shaman gets Might and an Elemental
   Shaman gets Wisdom.
-- **Priority lists instead of a single blessing.** Each row holds up to four
-  choices. Choice 1 is what that player normally gets. If it would overwrite a
+- **Priority lists instead of a single blessing.** WoW Forever paladins have
+  three blessings: Might, Wisdom and Kings. Salvation, Light and Sanctuary
+  were removed. Each row lists up to three of them in order. Choice 1 is what
+  that player normally gets. If it would overwrite a
   camp buff, isn't learned, or another paladin already gave it, the addon uses
   the next choice.
 - **Shows camp buffs on every player.** The bar shows their icons, and the row
@@ -82,7 +84,7 @@ Roles are Tank, Healer, Melee DPS, Ranged (physical, hunters) and Caster DPS.
 /cbb roles                 list everyone's detected role and why
 /cbb auras [unit]          list buffs + spell IDs on your target
 /cbb camp list             camp buffs the addon knows about
-/cbb camp add <spellId|aura name> <might|wisdom|kings|salvation|light|sanctuary>
+/cbb camp add <spellId|aura name> <might|wisdom|kings>
 /cbb camp del <n>          remove a camp buff you added
 /cbb refresh <minutes>     "refresh soon" threshold (default 5)
 /cbb scale <0.5-2>         bar scale
