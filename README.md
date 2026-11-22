@@ -143,8 +143,8 @@ Settings → AddOns):
     buff, your own lists are used.
   - With **Respect other paladins** on, a blessing another paladin is assigned
     to give a player counts as taken, so you pick your next one for them.
-  - WoW Forever can hold back addon messages during boss fights; the
-    assignments update once that ends.
+  - WoW Forever can hold back addon messages during fights. A request that
+    goes out in combat is sent once more when combat ends, so it isn't lost.
 - **Options tab:** camp buff protection, Greater Blessing blocking, respecting
   other paladins, target warning, tooltips, smart button, bar lock and scale,
   and the refresh warning time.

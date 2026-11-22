@@ -220,13 +220,19 @@ end
 PP.PallyPowerLoaded = PallyPowerLoaded
 
 -- force: the "Request update" button (ignores the throttle and Pally Power itself)
-function PP.Request(force)
+-- retry: the resend after combat (ignores the throttle)
+-- A request sent in combat goes out straight away, but WoW Forever may hold
+-- back addon messages in combat, so it is sent once more when combat ends.
+function PP.Request(force, retry)
     if not IsInGroup() then return false end
     if not force and PallyPowerLoaded() then return false end -- Pally Power asks by itself
     local now = GetTime()
-    if not force and now - lastReq < 10 then return false end
+    if not force and not retry and now - lastReq < 10 then return false end
     lastReq = now
     if not (C_ChatInfo and C_ChatInfo.SendAddonMessage) then return false end
+    if not retry and ns.InCombat and ns.InCombat() then
+        PP.retryAfterCombat = { force = force }
+    end
     local ok = pcall(C_ChatInfo.SendAddonMessage, PREFIX, "REQ", Channel())
     return ok
 end
@@ -339,8 +345,15 @@ frame:SetScript("OnEvent", function(_, event, prefix, msg, _, sender)
         C_Timer.After(3, function() PP.Request() end)
     elseif event == "GROUP_JOINED" or event == "GROUP_ROSTER_UPDATE" or event == "PLAYER_ENTERING_WORLD" then
         if IsInGroup() then C_Timer.After(2, function() PP.Request() end) end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        local r = PP.retryAfterCombat
+        if r then
+            PP.retryAfterCombat = nil
+            PP.Request(r.force, true)
+        end
     end
 end)
-for _, e in ipairs({ "CHAT_MSG_ADDON", "PLAYER_LOGIN", "GROUP_JOINED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD" }) do
+for _, e in ipairs({ "CHAT_MSG_ADDON", "PLAYER_LOGIN", "GROUP_JOINED", "GROUP_ROSTER_UPDATE", "PLAYER_ENTERING_WORLD",
+    "PLAYER_REGEN_ENABLED" }) do
     pcall(frame.RegisterEvent, frame, e)
 end

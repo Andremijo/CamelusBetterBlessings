@@ -820,5 +820,31 @@ test("pally power: reads other paladins' assignments and never sends any", funct
     ns2.RequestUpdate() M.flush()
 end)
 
+test("pally power: a request sent in combat is sent again when combat ends", function()
+    local sent = {}
+    C_ChatInfo = { SendAddonMessage = function(_, msg) sent[#sent + 1] = msg end, RegisterAddonMessagePrefix = function() end }
+    local PP = ns2.PP
+    local function regen() PP.frame._scripts.OnEvent(PP.frame, "PLAYER_REGEN_ENABLED") end
+    -- out of combat: one request, nothing extra afterwards
+    M.combat = false
+    M.now = M.now + 20
+    assert(PP.Request())
+    regen()
+    eq(#sent, 1)
+    -- in combat: sent right away AND once more after combat
+    M.now = M.now + 20
+    M.combat = true
+    assert(PP.Request())
+    eq(#sent, 2)
+    M.combat = false
+    regen()
+    eq(#sent, 3)
+    eq(sent[3], "REQ")
+    -- only once
+    regen()
+    eq(#sent, 3)
+    C_ChatInfo = nil
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end
