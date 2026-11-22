@@ -22,6 +22,7 @@ local OPTIONS = {
     { key = "respectOthers",  label = "Respect other paladins' blessings",    tip = "Skip blessings another paladin already put on the player." },
     { key = "warnTarget",     label = "Warn about my target's camp buffs",    tip = "Shows a line under the bar listing which blessings would overwrite a camp buff on your target (covers casts from your action bars too)." },
     { key = "tooltip",        label = "Show camp buffs in unit tooltips" },
+    { key = "flyoutLeft",     label = "Open the player list to the left",     tip = "When you hover a class on the bar, its player list opens to the left of the bar instead of the right." },
     { key = "showSmart",      label = "Show the smart button on the bar",     tip = "The smart button blesses the next player who needs it. Its key binding (Key Bindings > AddOns) works even when it is hidden." },
     { key = "followPP",       label = "Follow my Pally Power assignments",    tip = "When another paladin assigns you blessings in Pally Power, those come first. Camp buff protection still applies: if the assigned blessing would replace a camp buff, your own lists are used." },
     { key = "showSolo",       label = "Show the bar when not in a group" },
