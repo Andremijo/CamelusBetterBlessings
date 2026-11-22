@@ -110,7 +110,7 @@ local function RoleText(role, source, class)
     local c = info.color
     local choices = class and ns.CLASS_ROLES[class]
     local guess = (source == "class" or source == "group+class") and choices and #choices > 1
-    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, info.short, guess and "?" or "")
+    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, Logic.RoleShort(class, role), guess and "?" or "")
 end
 ns.RoleText = RoleText
 
@@ -696,8 +696,7 @@ function UI:PlayerTooltip(b)
     local tt = GameTooltip
     tt:SetOwner(b, "ANCHOR_RIGHT")
     tt:AddLine(st.name, ClassColor(st.class))
-    local role = ns.ROLE_INFO[st.role]
-    tt:AddDoubleLine("Role", string.format("%s (%s)", role and role.label or "?", ROLE_SOURCE_TEXT[st.roleSource] or "?"), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Role", string.format("%s (%s)", Logic.RoleLabel(st.class, st.role), ROLE_SOURCE_TEXT[st.roleSource] or "?"), 0.8, 0.8, 0.8, 1, 1, 1)
     if st.talentDetail then tt:AddDoubleLine("Talents", st.talentDetail, 0.8, 0.8, 0.8, 1, 1, 1) end
 
     local now = GetTime()

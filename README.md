@@ -56,6 +56,9 @@ The first source that gives an answer wins:
 4. **A class guess**, shown with a `?` after the role tag.
 
 Roles are Tank, Healer, Melee DPS, Ranged (physical, hunters) and Caster DPS.
+Hunters can also be set to **Melee weaving**, which has its own blessing order.
+Auto always picks Ranged for hunters, because talents can't show melee
+weaving, so set it in the Players tab.
 
 ## Using it
 
@@ -96,12 +99,13 @@ addon buttons to change in combat. Everything updates again when combat ends.
 Settings → AddOns):
 
 - **Blessings tab:** one header per class, with its Greater Blessing.
-  - Classes with several roles (Warrior, Paladin, Priest, Shaman, Druid) list
-    each role underneath. Each role row holds up to three blessings in
-    priority order.
-  - Single-role classes (Hunter, Rogue, Mage, Warlock) keep their three
-    blessings on the class header. Left-click or scroll a
-  slot to pick the next blessing; right-click to go back.
+  - Classes with several roles (Warrior, Paladin, Hunter, Priest, Shaman,
+    Druid) list each role underneath. Each role row holds up to three
+    blessings in priority order.
+  - Single-role classes (Rogue, Mage, Warlock) keep their three blessings on
+    the class header.
+  - Left-click or scroll a slot to pick the next blessing; right-click to go
+    back.
 - **Players tab:** every group member and their role.
   - Roles start on **Auto** (from the group role and talents). The tab shows
     what Auto picked and why.

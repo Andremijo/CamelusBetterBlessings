@@ -127,6 +127,22 @@ test("only WoW Forever blessings exist", function()
         for i = 1, ns.MAX_PRIORITY do assert(p[i] == false or ns.BLESSINGS[p[i]], key) end
     end
 end)
+test("hunters: Ranged DPS and Melee weaving", function()
+    eq(#ns.CLASS_ROLES.HUNTER, 2)
+    assert(L.IsValidRole("HUNTER", "MELEE"))
+    eq(L.RoleLabel("HUNTER", "MELEE"), "Melee weaving")
+    eq(L.RoleShort("HUNTER", "MELEE"), "WEAV")
+    eq(L.RoleLabel("ROGUE", "MELEE"), "Melee DPS")      -- only hunters get the special name
+    eq(L.RoleLabel("HUNTER", "RANGED"), "Ranged (physical)")
+    -- Auto never guesses melee weaving: talents, group DPS and class guess all say ranged
+    eq(L.ResolveRole("HUNTER", nil, "DAMAGER", "RANGED"), "RANGED")
+    eq(L.ResolveRole("HUNTER", nil, "DAMAGER", nil), "RANGED")
+    eq(L.ResolveRole("HUNTER", nil, nil, nil), "RANGED")
+    -- set by hand
+    eq(L.ResolveRole("HUNTER", "MELEE", "DAMAGER", "RANGED"), "MELEE")
+    local p = L.GetPriority({}, "HUNTER", "MELEE")
+    eq(p[1], "KINGS") eq(p[2], "MIGHT") eq(p[3], "WISDOM")
+end)
 test("every class/role pair has a default priority", function()
     for class, roles in pairs(ns.CLASS_ROLES) do
         for _, role in ipairs(roles) do
@@ -530,7 +546,7 @@ test("settings: classes are headers, roles are sub-rows only when a class has se
             eq(r.label._text, ns2.ClassLabel(r.class), "header shows the class")
             if #ns2.CLASS_ROLES[r.class] == 1 then eq(#r.slots, ns2.MAX_PRIORITY, r.class .. " slots on header") else eq(#r.slots, 0) end
         else
-            eq(r.label._text, ns2.ROLE_INFO[r.role].label, "sub-row shows the role")
+            eq(r.label._text, ns2.Logic.RoleLabel(r.class, r.role), "sub-row shows the role")
         end
     end
     -- the single-role header's slots edit that class's only role

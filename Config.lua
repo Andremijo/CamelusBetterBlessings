@@ -181,7 +181,7 @@ function Config:BuildBlessingsTab(tab)
             for _, role in ipairs(roles) do
                 local row = { class = class, role = role, slots = {} }
                 local rc = ns.ROLE_INFO[role].color
-                local label = NewLabel(tab, "GameFontHighlightSmall", ns.ROLE_INFO[role].label)
+                local label = NewLabel(tab, "GameFontHighlightSmall", Logic.RoleLabel(class, role))
                 label:SetPoint("TOPLEFT", tab, "TOPLEFT", 22, y - 4)
                 label:SetTextColor(rc[1], rc[2], rc[3])
                 row.label = label
@@ -210,7 +210,7 @@ local function RoleButtonText(st)
     local manual = ns.db.overrides[st.name]
     local role = manual or st.role
     local info = ns.ROLE_INFO[role]
-    local text = info and (Hex(info.color[1], info.color[2], info.color[3]) .. info.label .. "|r") or "?"
+    local text = info and (Hex(info.color[1], info.color[2], info.color[3]) .. Logic.RoleLabel(st.class, role) .. "|r") or "?"
     if not manual then text = "Auto: " .. text end
     return text
 end
@@ -335,8 +335,7 @@ function Config:RefreshPlayers(force)
             else
                 -- what Auto would pick, and why
                 local autoRole, src = Logic.ResolveRole(st.class, nil, st.groupRole, st.talentRole)
-                local info = ns.ROLE_INFO[autoRole]
-                detected = string.format("Auto picks %s (%s%s)", info and info.label or "?", ns.ROLE_SOURCE_TEXT[src] or "?",
+                detected = string.format("Auto picks %s (%s%s)", Logic.RoleLabel(st.class, autoRole), ns.ROLE_SOURCE_TEXT[src] or "?",
                     (src == "talents" and st.talentDetail) and (": " .. st.talentDetail) or "")
             end
             row.detail:SetText(detected)
