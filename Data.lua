@@ -59,17 +59,31 @@ ns.BLESSINGS = {
 
 ---------------------------------------------------------------------------
 -- WoW Forever camp buffs that are mutually exclusive with a paladin blessing.
---   match     : lower-case substrings matched against the aura name
---   spellIds  : known aura spell IDs (matched first, language independent)
+--
+-- How they show up on the client: a player near a campfire gets ONE visible
+-- aura, "Camp Benefits" (CAMP_CONTAINER below), whose tooltip has a line per
+-- active camp feature, e.g. "Fish Bowl: ...". The real stat aura (Boosted
+-- Stats) is hidden from addons, so the addon reads the Camp Benefits tooltip.
+--
+--   feature   : spell ID of the camp feature; its (localized) name is what the
+--               Camp Benefits tooltip line starts with
+--   match     : lower-case names matched against tooltip lines and aura names
+--   spellIds  : aura spell IDs, in case a feature ever shows as its own aura
 --   conflicts : blessing keys that would REPLACE this camp buff
 -- More can be added in game with /cbb camp add (stored in SavedVariables).
--- Use /cbb auras on a buffed player to see the real names / IDs.
+-- /cbb auras lists every buff and the Camp Benefits tooltip lines.
 ---------------------------------------------------------------------------
+ns.CAMP_CONTAINER = {
+    name = "Camp Benefits",
+    spellIds = { 1229741 },
+    match = { "camp benefits" },
+}
+
 ns.CAMP_BUFFS = {
     {
-        key = "FISH_BOWL", name = "Fish Bowl", profession = "Fishing", effect = "+8% all stats",
-        match = { "fish bowl" }, spellIds = { 1307245 }, conflicts = { "KINGS" },
-        icon = "Interface\\Icons\\INV_Misc_Fish_02",
+        key = "FISH_BOWL", name = "Fish Bowl", profession = "Fishing", effect = "+8% all stats (Boosted Stats)",
+        feature = 1307245, match = { "fish bowl", "boosted stats" }, spellIds = { 1230098 },
+        conflicts = { "KINGS" }, icon = "Interface\\Icons\\INV_Misc_Fish_02",
     },
     {
         key = "LODESTONE", name = "Lodestone", profession = "Mining", effect = "Melee attack power",

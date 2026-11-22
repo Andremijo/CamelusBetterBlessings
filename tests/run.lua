@@ -75,10 +75,28 @@ test("choose: my blessing ok / refresh / swap", function()
 end)
 test("camp match by id and name", function()
     local list = ns.CAMP_BUFFS
-    eq(L.MatchCampBuff("whatever", 1307245, list).key, "FISH_BOWL")
+    eq(L.MatchCampBuff("whatever", 1230098, list).key, "FISH_BOWL")
+    eq(L.MatchCampBuff("Boosted Stats", nil, list).key, "FISH_BOWL")
     eq(L.MatchCampBuff("Lodestone", nil, list).key, "LODESTONE")
     eq(L.MatchCampBuff("Camp: Mana Well", nil, list).key, "MANA_WELL")
     eq(L.MatchCampBuff("Blessing of Kings", nil, list), nil)
+end)
+test("camp benefits container detection", function()
+    assert(L.IsCampContainer("Camp Benefits", nil, ns.CAMP_CONTAINER))
+    assert(L.IsCampContainer("whatever", 1229741, ns.CAMP_CONTAINER))
+    assert(not L.IsCampContainer("Fish Bowl", nil, ns.CAMP_CONTAINER))
+end)
+test("camp benefits tooltip lines", function()
+    local found = L.MatchCampLines({ "Camp Benefits", "Fish Bowl: All stats increased by 8%.", "Incense Candle: Intellect increased by 25." }, ns.CAMP_BUFFS)
+    eq(#found, 1) eq(found[1].key, "FISH_BOWL")
+    found = L.MatchCampLines({ "Lodestone: +90 attack power", "Mana Well: 29 mana per 5 sec." }, ns.CAMP_BUFFS)
+    eq(#found, 2)
+    found = L.MatchCampLines({ "Fischschale: Alle Werte +8%" }, { { key = "X", name = "Fish Bowl", localName = "Fischschale", match = {} } })
+    eq(#found, 1)
+    eq(#L.MatchCampLines({ "Camp Chair: +1% crit" }, ns.CAMP_BUFFS), 0)
+end)
+test("all camp conflicts", function()
+    eq(#L.AllCampConflicts(ns.CAMP_BUFFS), 3)
 end)
 test("greater conflicts", function()
     local r = L.GreaterConflicts("WISDOM", { { name = "A", conflicts = { WISDOM = "Mana Well" } }, { name = "B", conflicts = {} } })
@@ -122,13 +140,14 @@ for id in pairs(M.spellNames) do M.known[id] = true end
 M.known[20911] = nil M.known[25899] = nil -- no Sanctuary talent
 
 M.units.player = { guid = "G-P", name = "Camelus", class = "PALADIN", talents = { 31, 5, 15 }, auras = {} }
+-- Camp buffs arrive the way WoW Forever shows them: one "Camp Benefits" aura.
 M.units.party1 = { guid = "G-1", name = "Tankwar", class = "WARRIOR", role = "TANK", talents = { 0, 5, 31 }, auras = {} }
 M.units.party2 = { guid = "G-2", name = "Elly", class = "SHAMAN", role = "DAMAGER", talents = { 31, 0, 5 },
-    auras = { M.aura("Mana Well") } }
+    auras = { M.campBenefits({ "Camp Benefits", "Mana Well: Restores 29 mana per 5 sec." }) } }
 M.units.party3 = { guid = "G-3", name = "Enhy", class = "SHAMAN", role = "DAMAGER", talents = { 0, 31, 5 },
-    auras = { M.aura("Lodestone") } }
+    auras = { M.campBenefits({ "Camp Benefits", "Lodestone: Melee attack power increased by 90.", "Camp Chair: +1% crit" }) } }
 M.units.party4 = { guid = "G-4", name = "Stabby", class = "ROGUE", role = "DAMAGER", talents = { 20, 31, 0 },
-    auras = { M.aura("Fish Bowl", { spellId = 1307245 }), M.aura("Blessing of Kings", { source = "raid9" }) } }
+    auras = { M.campBenefits({ "Fish Bowl: All stats increased by 8%." }), M.aura("Blessing of Kings", { source = "raid9" }) } }
 
 M.fire("ADDON_LOADED", "CamelusBetterBlessings")
 M.fire("PLAYER_LOGIN")
@@ -231,6 +250,37 @@ test("integration: custom camp buff via slash command", function()
     SlashCmdList.CAMELUSBETTERBLESSINGS('camp add Weird Campfire Thing kings')
     M.flush()
     eq(st("G-1").choice.blessing, "MIGHT")
+end)
+test("integration: the reported bug - Fish Bowl on yourself blocks Kings", function()
+    ns2.db.overrides["Camelus"] = "TANK"            -- Kings first for a paladin tank
+    M.units.player.auras = {}
+    M.fire("UNIT_AURA", "player") M.flush()
+    eq(st("G-P").choice.blessing, "KINGS")
+    eq(rowFor("G-P")._attrs.spell1, "Blessing of Kings")
+    M.units.player.auras = { M.campBenefits({ "Camp Benefits", "Fish Bowl: All stats increased by 8%." }) }
+    M.fire("UNIT_AURA", "player") M.flush()
+    assert(st("G-P").choice.blessing ~= "KINGS", "Kings must not be picked with Fish Bowl")
+    assert(rowFor("G-P")._attrs.spell1 ~= "Blessing of Kings", "the row must not cast Kings")
+    eq(st("G-P").choice.skipped[1].reason, "camp")
+    ns2.db.overrides["Camelus"] = nil
+end)
+test("integration: unreadable Camp Benefits blocks every camp blessing", function()
+    M.units.player.auras = { M.campBenefits(false) }
+    ns2.db.overrides["Camelus"] = "TANK"
+    M.fire("UNIT_AURA", "player") M.flush()
+    local b = st("G-P").choice.blessing
+    assert(b ~= "KINGS" and b ~= "MIGHT" and b ~= "WISDOM", "got " .. tostring(b))
+    assert(st("G-P").aura.camps[1].unreadable, "camp should be marked unreadable")
+    ns2.db.overrides["Camelus"] = nil
+    M.units.player.auras = {}
+    M.fire("UNIT_AURA", "player") M.flush()
+end)
+test("integration: /cbb auras prints Camp Benefits lines", function()
+    local before = #M.chat
+    SlashCmdList.CAMELUSBETTERBLESSINGS("auras party4")
+    local text = table.concat(M.chat, "\n", before + 1)
+    assert(text:find("Fish Bowl: All stats"), "tooltip line missing")
+    assert(text:find("recognised: Fish Bowl"), "recognised line missing")
 end)
 test("integration: other slash commands run", function()
     for _, c in ipairs({ "", "", "lock", "lock", "roles", "auras party2", "camp list", "camp del 4", "refresh 10", "scale 1.2", "help", "config", "config", "reset" }) do

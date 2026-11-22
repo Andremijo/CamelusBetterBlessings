@@ -90,8 +90,10 @@ Roles are Tank, Healer, Melee DPS, Ranged (physical, hunters) and Caster DPS.
 ```
 
 If Blizzard renames a camp buff or adds a new one, run `/cbb auras` on a player
-who has it. That shows the exact aura name and spell ID. Then add it with
-`/cbb camp add`.
+who has it. That shows every buff with its spell ID, plus the lines of the
+*Camp Benefits* tooltip and which of them the addon recognised. Then add the
+missing one by the name its line starts with, for example
+`/cbb camp add "Mana Well" wisdom`.
 
 ## Limits
 
@@ -106,9 +108,13 @@ These come from the WoW client and can't be worked around:
   target warning covers the rest.
 - **Greater Blessings are class-wide.** That is a spell limitation, so role
   logic only applies to single blessings.
-- **Camp buff data comes from community guides.** Only Fish Bowl's spell ID
-  (1307245) is known. Lodestone and Mana Well are matched by aura name.
-  `/cbb auras` and `/cbb camp add` let you fix this in game if needed.
+- **How camp buffs are detected.** WoW Forever shows no separate aura per
+  camp buff. A player at a campfire gets one aura, *Camp Benefits*, and its
+  tooltip has a line per active feature, such as `Fish Bowl: ...`. The real
+  stat aura is hidden from addons, so the addon reads that tooltip. If the
+  tooltip can't be read, it treats Kings, Might and Wisdom as blocked for
+  that player. Lodestone and Mana Well are matched by their English names,
+  so `/cbb auras` and `/cbb camp add` let you fix them in game if needed.
 
 ## Installing with WoWUp
 
