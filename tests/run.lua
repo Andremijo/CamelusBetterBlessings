@@ -362,9 +362,43 @@ test("integration: players tab sets roles", function()
     eq(ns2.db.overrides["Enhy"], nil)
     M.flush()
 end)
+test("settings: classes are headers, roles are sub-rows only when a class has several", function()
+    ns2.Config:Toggle("blessings")
+    local rows = ns2.Config.slotRows
+    local byClass = {}
+    for _, r in ipairs(rows) do
+        byClass[r.class] = byClass[r.class] or { header = 0, sub = 0 }
+        if r.isHeader then byClass[r.class].header = byClass[r.class].header + 1 else byClass[r.class].sub = byClass[r.class].sub + 1 end
+    end
+    for class, roles in pairs(ns2.CLASS_ROLES) do
+        eq(byClass[class].header, 1, class .. " header")
+        eq(byClass[class].sub, #roles > 1 and #roles or 0, class .. " role rows")
+    end
+    for _, r in ipairs(rows) do
+        if r.isHeader then
+            eq(r.label._text, ns2.ClassLabel(r.class), "header shows the class")
+            if #ns2.CLASS_ROLES[r.class] == 1 then eq(#r.slots, ns2.MAX_PRIORITY, r.class .. " slots on header") else eq(#r.slots, 0) end
+        else
+            eq(r.label._text, ns2.ROLE_INFO[r.role].label, "sub-row shows the role")
+        end
+    end
+    -- the single-role header's slots edit that class's only role
+    for _, r in ipairs(rows) do
+        if r.class == "MAGE" then
+            r.slots[1]._scripts.OnClick(r.slots[1], "LeftButton")
+            eq(ns2.db.assign["MAGE:CASTER"][1], "KINGS")
+            ns2.db.assign["MAGE:CASTER"] = nil
+        end
+    end
+end)
 test("integration: config clicks", function()
     ns2.Config:Toggle("blessings")
-    local row = ns2.Config.slotRows[1]
+    local row, header
+    for _, r in ipairs(ns2.Config.slotRows) do
+        if r.class == "WARRIOR" and r.role == "TANK" then row = r end
+        if r.class == "WARRIOR" and r.isHeader then header = r end
+    end
+    row.greater = header.greater
     row.slots[1]._scripts.OnClick(row.slots[1], "LeftButton")
     eq(ns2.db.assign["WARRIOR:TANK"][1], false)
     row.greater._scripts.OnClick(row.greater, "RightButton")

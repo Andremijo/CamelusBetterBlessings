@@ -9,10 +9,10 @@ local Logic = ns.Logic
 local Config = {}
 ns.Config = Config
 
-local WIDTH, HEIGHT = 440, 560
+local WIDTH, HEIGHT = 440, 650
 local PAD = 14
 local CONTENT_TOP = -64
-local ROW_H = 22
+local ROW_H = 20
 local SLOT = 20
 local LABEL_W = 170
 local PLAYER_ROW_H = 36
@@ -107,7 +107,7 @@ end
 
 function Config:BuildBlessingsTab(tab)
     local help = NewLabel(tab, "GameFontHighlightSmall",
-        "Each row is what that class/role gets from you, in order. A later choice is used when an earlier one would replace a camp buff.")
+        "For each class (and each role it can play): the blessings you give, in order. A later choice is used when an earlier one would replace a camp buff.")
     help:SetPoint("TOPLEFT", 0, 0)
     help:SetWidth(WIDTH - PAD * 2)
 
@@ -122,48 +122,73 @@ function Config:BuildBlessingsTab(tab)
     Header("Greater", gx - 6)
     for i = 1, ns.MAX_PRIORITY do Header(tostring(i), px + (i - 1) * (SLOT + 8) + 6) end
 
+    -- One header row per class (icon, name, Greater Blessing). Classes with
+    -- several roles get an indented row per role under it; single-role
+    -- classes keep their blessing slots on the header row itself.
     self.slotRows = {}
     local y = headerY - 16
-    for _, class in ipairs(ns.CLASS_ORDER) do
-        for ri, role in ipairs(ns.CLASS_ROLES[class]) do
-            local row = { class = class, role = role, slots = {} }
-            if ri == 1 and y ~= headerY - 16 then
-                local line = tab:CreateTexture(nil, "ARTWORK")
-                line:SetColorTexture(1, 1, 1, 0.12)
-                line:SetHeight(1)
-                line:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y + 1)
-                line:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, y + 1)
+    local function Slots(row, class, role, rowY)
+        for i = 1, ns.MAX_PRIORITY do
+            local sb = MakeSlot(tab, function(btn, dir)
+                local cur = Logic.GetPriority(ns.db.assign, class, role)
+                local copy = {}
+                for k = 1, ns.MAX_PRIORITY do copy[k] = cur[k] or false end
+                copy[btn.slot] = Logic.CycleBlessing(copy[btn.slot], dir, true)
+                ns.db.assign[Logic.AssignKey(class, role)] = copy
+                Config:Refresh() Changed() SlotTooltip(btn)
+            end)
+            sb.slot = i
+            sb.class, sb.role = class, role
+            sb:SetPoint("TOPLEFT", tab, "TOPLEFT", px + (i - 1) * (SLOT + 8), rowY)
+            row.slots[i] = sb
+        end
+    end
+    for ci, class in ipairs(ns.CLASS_ORDER) do
+        local roles = ns.CLASS_ROLES[class]
+        local single = #roles == 1
+        if ci > 1 then
+            local line = tab:CreateTexture(nil, "ARTWORK")
+            line:SetColorTexture(1, 1, 1, 0.15)
+            line:SetHeight(1)
+            line:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y + 2)
+            line:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, y + 2)
+        end
+        -- class header
+        local header = { class = class, slots = {}, isHeader = true }
+        local icon = tab:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(16, 16)
+        icon:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y - 2)
+        ns.SetClassIcon(icon, class)
+        local name = NewLabel(tab, "GameFontNormal", ns.ClassLabel(class))
+        name:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+        name:SetTextColor(ns.ClassColor(class))
+        header.label = name
+        local gb = MakeSlot(tab, function(btn, dir)
+            ns.db.greater[class] = Logic.CycleBlessing(ns.GetGreater(class), dir, true)
+            Config:Refresh() Changed() SlotTooltip(btn)
+        end)
+        gb.isGreater = true
+        gb:SetPoint("TOPLEFT", tab, "TOPLEFT", gx, y)
+        header.greater = gb
+        if single then
+            header.role = roles[1]
+            Slots(header, class, roles[1], y)
+        end
+        self.slotRows[#self.slotRows + 1] = header
+        y = y - ROW_H
+        -- role sub-rows
+        if not single then
+            for _, role in ipairs(roles) do
+                local row = { class = class, role = role, slots = {} }
+                local rc = ns.ROLE_INFO[role].color
+                local label = NewLabel(tab, "GameFontHighlightSmall", ns.ROLE_INFO[role].label)
+                label:SetPoint("TOPLEFT", tab, "TOPLEFT", 22, y - 4)
+                label:SetTextColor(rc[1], rc[2], rc[3])
+                row.label = label
+                Slots(row, class, role, y)
+                self.slotRows[#self.slotRows + 1] = row
+                y = y - ROW_H
             end
-            local label = NewLabel(tab)
-            label:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y - 4)
-            label:SetWidth(LABEL_W - 8)
-            local rc = ns.ROLE_INFO[role].color
-            label:SetText(string.format("%s%s|r  %s%s|r", Hex(ns.ClassColor(class)), ri == 1 and ns.ClassLabel(class) or "",
-                Hex(rc[1], rc[2], rc[3]), ns.ROLE_INFO[role].label))
-            if ri == 1 then
-                local gb = MakeSlot(tab, function(btn, dir)
-                    ns.db.greater[class] = Logic.CycleBlessing(ns.GetGreater(class), dir, true)
-                    Config:Refresh() Changed() SlotTooltip(btn)
-                end)
-                gb.isGreater = true
-                gb:SetPoint("TOPLEFT", tab, "TOPLEFT", gx, y)
-                row.greater = gb
-            end
-            for i = 1, ns.MAX_PRIORITY do
-                local sb = MakeSlot(tab, function(btn, dir)
-                    local cur = Logic.GetPriority(ns.db.assign, class, role)
-                    local copy = {}
-                    for k = 1, ns.MAX_PRIORITY do copy[k] = cur[k] or false end
-                    copy[btn.slot] = Logic.CycleBlessing(copy[btn.slot], dir, true)
-                    ns.db.assign[Logic.AssignKey(class, role)] = copy
-                    Config:Refresh() Changed() SlotTooltip(btn)
-                end)
-                sb.slot = i
-                sb:SetPoint("TOPLEFT", tab, "TOPLEFT", px + (i - 1) * (SLOT + 8), y)
-                row.slots[i] = sb
-            end
-            self.slotRows[#self.slotRows + 1] = row
-            y = y - ROW_H
         end
     end
 
@@ -451,8 +476,10 @@ function Config:Refresh()
     if not self.frame or not self.frame:IsShown() then return end
     for _, row in ipairs(self.slotRows) do
         if row.greater then PaintSlot(row.greater, ns.GetGreater(row.class), true) end
-        local p = Logic.GetPriority(ns.db.assign, row.class, row.role)
-        for i = 1, ns.MAX_PRIORITY do PaintSlot(row.slots[i], p[i], false) end
+        if row.role then
+            local p = Logic.GetPriority(ns.db.assign, row.class, row.role)
+            for i = 1, ns.MAX_PRIORITY do PaintSlot(row.slots[i], p[i], false) end
+        end
     end
     for _, cb in ipairs(self.checks) do cb:SetChecked(ns.opt[cb.key] and true or false) end
     for _, update in ipairs(self.steppers) do update() end
