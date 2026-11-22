@@ -457,6 +457,42 @@ test("bar: rows are packed tight like Pally Power", function()
     local fb = shown[1].flyout.buttons
     if fb[2] then eq(fb[1]._points.TOPLEFT.y - fb[2]._points.TOPLEFT.y, 29) end
 end)
+test("bar: left-click = Greater, right-click = next player in the class, own blessing", function()
+    -- Two shamans with no buffs: Elly (Elemental -> Caster) then Enhy (Enhancement -> Melee)
+    M.units.party2.auras, M.units.party3.auras = {}, {}
+    M.fire("UNIT_AURA", "party2") M.fire("UNIT_AURA", "party3") M.flush()
+    local cb = classRow("SHAMAN")
+    -- left-click is still the class's Greater Blessing (Wisdom for shamans)
+    eq(cb._attrs.spell1, "Greater Blessing of Wisdom")
+    -- right-click: first shaman in the list, with HER blessing
+    cb._scripts.PreClick(cb, "RightButton")
+    eq(cb._attrs.type2, "spell")
+    eq(cb._attrs.unit2, "party2")
+    eq(cb._attrs.spell2, "Blessing of Wisdom")
+    -- she was just blessed: the next right-click goes to the enhancement shaman, with Might
+    M.fire("UNIT_SPELLCAST_SENT", "player", "Elly", "x", 19742)
+    cb._scripts.PreClick(cb, "RightButton")
+    eq(cb._attrs.unit2, "party3")
+    eq(cb._attrs.spell2, "Blessing of Might")
+    -- both done: right-click does nothing
+    M.fire("UNIT_SPELLCAST_SENT", "player", "Enhy", "x", 19740)
+    cb._scripts.PreClick(cb, "RightButton")
+    eq(cb._attrs.type2, nil)
+    -- the left-click Greater Blessing was not touched
+    eq(cb._attrs.spell1, "Greater Blessing of Wisdom")
+    -- out of range players are skipped
+    M.now = M.now + 5   -- pending marks expire
+    M.far = { party2 = true }
+    ns2.RequestUpdate() M.flush()
+    cb._scripts.PreClick(cb, "RightButton")
+    eq(cb._attrs.unit2, "party3")
+    M.far = nil
+    ns2.UI:ClassTooltip(cb)
+    -- restore the scenario's buffs for later tests
+    M.units.party2.auras = { M.campBenefits({ "Camp Benefits", "Mana Well: Restores 29 mana per 5 sec." }) }
+    M.units.party3.auras = { M.campBenefits({ "Camp Benefits", "Lodestone: Melee attack power increased by 90.", "Camp Chair: +1% crit" }) }
+    M.fire("UNIT_AURA", "party2") M.fire("UNIT_AURA", "party3") M.flush()
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)

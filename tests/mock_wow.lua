@@ -119,7 +119,7 @@ function M.install()
     _G.C_Spell = {
         GetSpellName = function(id) return spellNames[id] end,
         GetSpellTexture = function(id) return spellNames[id] and ("tex:" .. id) end,
-        IsSpellInRange = function() return true end,
+        IsSpellInRange = function(_, unit) return not (M.far and M.far[unit]) end,
         GetSpellInfo = function() return nil end,
     }
     _G.IsPlayerSpell = function(id) return M.known[id] or false end

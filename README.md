@@ -67,15 +67,23 @@ Roles are Tank, Healer, Melee DPS, Ranged (physical, hunters) and Caster DPS.
   - green: everyone has theirs
   - yellow: a blessing is running out soon
   - grey: the players who need one are out of range or dead
-- **Click a class button** to cast its Greater Blessing. A red ✕ over the
+- **Left-click a class button** to cast its Greater Blessing. A red ✕ over the
   icon means it is blocked because it would replace someone's camp buff.
+- **Right-click a class button** to bless the next player of that class who
+  needs it, from the top of the list down, like Pally Power.
+  - Each player gets **their own** blessing, from their role and camp buffs.
+    With an Enhancement and an Elemental Shaman, one right-click gives Might
+    to one and the next gives Wisdom to the other.
+  - It skips players who already have theirs, are out of range or dead, or
+    whose every option would replace a camp buff.
 - **Hover a class button** to open a flyout to the right, with one button per
   player:
   - Players are green when buffed and red when missing.
   - Purple means every option would replace a camp buff.
   - Each button shows the blessing it will cast, their role, their camp buffs
     and the time left.
-  - **Click a red player** to give them the blessing set up for them.
+  - **Click a red player** to give them the blessing set up for them, when
+    you want a specific player rather than the next one.
 - **The gear** next to the bar opens the settings. Drag it to move the bar.
 - **Smart button key binding:** Key Bindings → AddOns → *Camelus' Better
   Blessings*. It blesses the next player who needs it, tanks first. It works
