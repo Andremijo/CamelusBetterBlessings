@@ -22,10 +22,14 @@ local Logic = ns.Logic
 local UI = {}
 ns.UI = UI
 
-local BTN_W, BTN_H, GAP = 112, 28, 2
+-- The tooltip-style border has a transparent margin, so a button looks about
+-- 3 units smaller than its frame. A small negative gap makes the visible gap
+-- between rows about 2 units (~3 px), like Pally Power.
+local BTN_W, BTN_H, GAP = 88, 30, -1
+local FLY_GAP = 2 -- horizontal space between a class button and its flyout
 local FLY_W = 210
 local STATUS_W = 38
-local ICON = 22
+local ICON = 24
 local HANDLE = 16
 local MAX_CAMP_ICONS = 2
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
@@ -291,7 +295,7 @@ local function CreateClassButton(i)
     b.campMark:Hide()
 
     local fly = CreateFrame("Frame", nil, b)
-    fly:SetPoint("TOPLEFT", b, "TOPRIGHT", GAP, 0)
+    fly:SetPoint("TOPLEFT", b, "TOPRIGHT", FLY_GAP, 0)
     fly:SetSize(FLY_W, BTN_H)
     fly:Hide()
     fly.buttons = {}

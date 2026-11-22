@@ -417,6 +417,17 @@ test("bar: names never run under the camp icons or the status text", function()
     eq(cb.campMark._points.LEFT.rel, cb.icon2)
     eq(cb.campMark._points.LEFT.relPoint, "RIGHT")
 end)
+test("bar: rows are packed tight like Pally Power", function()
+    local shown = {}
+    for _, cb in ipairs(ns2.UI.classButtons) do if cb._shown then shown[#shown + 1] = cb end end
+    assert(#shown >= 2, "need two class rows")
+    local y1, y2 = shown[1]._points.TOPLEFT.y, shown[2]._points.TOPLEFT.y
+    eq(y1 - y2, 29)                     -- 30 tall, overlapping by 1 => ~2 visible units apart
+    eq(shown[1]._width, 88)
+    -- flyout rows use the same spacing
+    local fb = shown[1].flyout.buttons
+    if fb[2] then eq(fb[1]._points.TOPLEFT.y - fb[2]._points.TOPLEFT.y, 29) end
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)
