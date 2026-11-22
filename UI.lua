@@ -26,6 +26,10 @@ ns.UI = UI
 -- 3 units smaller than its frame. A small negative gap makes the visible gap
 -- between rows about 2 units (~3 px), like Pally Power.
 local BTN_W, BTN_H, GAP = 88, 30, -1
+-- Class buttons show one small icon per distinct camp buff in the class.
+-- 88 fits one; the whole column widens only when a class shows more.
+local MAX_CAMP_MARKS, MARK_SIZE, MARK_GAP = 3, 16, 2
+
 local FLY_GAP = 2 -- horizontal space between a class button and its flyout
 local FLY_W = 210
 local STATUS_W = 38
@@ -288,11 +292,19 @@ local function CreateClassButton(i)
     b.blockedMark:SetAllPoints(b.icon2)
     b.blockedMark:SetTexture(BLOCKED_ICON)
     b.blockedMark:Hide()
-    b.campMark = b:CreateTexture(nil, "OVERLAY")
-    b.campMark:SetSize(16, 16)
-    b.campMark:SetPoint("LEFT", b.icon2, "RIGHT", 4, 0)
-    b.campMark:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    b.campMark:Hide()
+    b.campMarks = {}
+    for j = 1, MAX_CAMP_MARKS do
+        local t = b:CreateTexture(nil, "OVERLAY")
+        t:SetSize(MARK_SIZE, MARK_SIZE)
+        if j == 1 then
+            t:SetPoint("LEFT", b.icon2, "RIGHT", 4, 0)
+        else
+            t:SetPoint("LEFT", b.campMarks[j - 1], "RIGHT", MARK_GAP, 0)
+        end
+        t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        t:Hide()
+        b.campMarks[j] = t
+    end
 
     local fly = CreateFrame("Frame", nil, b)
     fly:SetPoint("TOPLEFT", b, "TOPRIGHT", FLY_GAP, 0)
@@ -509,7 +521,8 @@ function UI:GreaterInfo(class)
     local g = ns.GetGreater(class)
     local members = ns.ClassMembers(class)
     local info = { blessing = g, members = members, have = 0, target = nil, replaces = {}, notIdeal = {},
-                   need = 0, needInRange = 0, refresh = 0, anyCamp = nil }
+                   need = 0, needInRange = 0, refresh = 0, camps = {} }
+    local seenCamp = {}
     local list = {}
     for _, st in ipairs(members) do
         list[#list + 1] = { name = ShortName(st.name), conflicts = st.conflicts }
@@ -525,8 +538,14 @@ function UI:GreaterInfo(class)
             if st.inRange then info.needInRange = info.needInRange + 1 end
             if c.status == "REFRESH" then info.refresh = info.refresh + 1 end
         end
-        local camp = st.aura and st.aura.camps and st.aura.camps[1]
-        if camp and not info.anyCamp then info.anyCamp = camp end
+        -- every distinct camp buff anyone in the class has
+        for _, camp in ipairs(st.aura and st.aura.camps or {}) do
+            local id = camp.name or camp.key
+            if id and not seenCamp[id] then
+                seenCamp[id] = true
+                info.camps[#info.camps + 1] = camp
+            end
+        end
     end
     info.conflicts = Logic.GreaterConflicts(g, list)
     info.known = g and ns.BLESSINGS[g] and ns.BLESSINGS[g].greaterKnown or false
@@ -542,12 +561,11 @@ function UI:RefreshClassButton(cb, canSet)
     cb.icon2:SetTexture(info.blessing and ns.BlessingTexture(info.blessing, true) or QUESTION)
     cb.icon2:SetDesaturated((not info.blessing or info.blocked or not info.known) and true or false)
     cb.blockedMark:SetShown(info.blocked and true or false)
-    if info.anyCamp then
-        cb.campMark:SetTexture(info.anyCamp.icon or QUESTION)
-        cb.campMark:Show()
-    else
-        cb.campMark:Hide()
+    for j = 1, MAX_CAMP_MARKS do
+        local t, camp = cb.campMarks[j], info.camps[j]
+        if camp then t:SetTexture(camp.icon or QUESTION) t:Show() else t:Hide() end
     end
+    cb.numCampMarks = math.min(#info.camps, MAX_CAMP_MARKS)
     -- colour = the class's single-blessing state (that is what dungeons use)
     local key
     if info.needInRange > info.refresh then key = "MISSING"
@@ -602,7 +620,26 @@ function UI:Refresh()
     end
     local canSet = not InCombatLockdown()
     for i = 1, self.numClasses or 0 do self:RefreshClassButton(self.classButtons[i], canSet) end
+    if canSet then self:FitWidth() end
     self:PrepareSmart()
+end
+
+-- Same width for every class button: wide enough for the class showing the
+-- most camp icons, never narrower than BTN_W. Out of combat only.
+function UI:ButtonWidth(marks)
+    local needed = 4 + ICON + 3 + ICON + 4 + marks * (MARK_SIZE + MARK_GAP) + 4
+    return math.max(BTN_W, needed)
+end
+
+function UI:FitWidth()
+    local most = 0
+    for i = 1, self.numClasses or 0 do most = math.max(most, self.classButtons[i].numCampMarks or 0) end
+    local w = self:ButtonWidth(most)
+    if w == self.buttonWidth then return end
+    self.buttonWidth = w
+    for _, cb in ipairs(self.classButtons) do cb:SetWidth(w) end
+    if self.smart then self.smart:SetWidth(w) end
+    self.main:SetWidth(HANDLE + 2 + w)
 end
 
 ---------------------------------------------------------------------------

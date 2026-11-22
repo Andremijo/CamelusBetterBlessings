@@ -2,7 +2,7 @@
 ## Title: Camelus' Better Blessings
 ## Notes: Pally Power-style blessing assignments by class AND role (tank / healer / melee / ranged / caster) that will not overwrite WoW Forever campfire buffs.
 ## Author: Camelus
-## Version: 1.1.3
+## Version: 1.1.4
 ## IconTexture: Interface\Icons\Spell_Holy_SealOfWisdom
 ## SavedVariables: CamelusBetterBlessingsDB
 ## SavedVariablesPerCharacter: CamelusBetterBlessingsCharDB
