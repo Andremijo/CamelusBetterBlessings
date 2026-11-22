@@ -310,6 +310,50 @@ test("integration: camp buffs use the real item icons", function()
     eq(st("G-3").aura.camps[1].icon, "item:279960")   -- Lodestone
     eq(ns2.CAMP_BUFFS[2].localName, "Lodestone")      -- "(Tier 1)" stripped
 end)
+test("camp re-check: a feature leaving Camp Benefits is noticed without UNIT_AURA", function()
+    -- Holy paladin: Wisdom > Kings. Mana Well blocks Wisdom, so Kings is given.
+    M.units.player.auras = {
+        M.campBenefits({ "Camp Benefits", "Mana Well: Restores 29 mana per 5 sec.", "Camp Chair: +1% crit" }),
+        M.aura("Blessing of Kings", { mine = true }),
+    }
+    M.fire("UNIT_AURA", "player") M.flush()
+    eq(st("G-P").choice.blessing, "KINGS")
+    eq(st("G-P").choice.status, "OK")
+    -- Mana Well's line disappears, Camp Benefits stays, and no UNIT_AURA fires.
+    M.units.player.auras[1]._tooltip = { "Camp Benefits", "Camp Chair: +1% crit" }
+    for _ = 1, 5 do M.now = M.now + 1.01 M.ticker() M.flush() end   -- within 5 seconds
+    eq(st("G-P").choice.blessing, "WISDOM")
+    eq(st("G-P").choice.status, "SWAP")      -- click replaces my Kings with Wisdom
+    M.units.player.auras = {}
+    M.fire("UNIT_AURA", "player") M.flush()
+end)
+test("camp re-check: an expired camp buff is re-read right away", function()
+    M.units.player.auras = { M.aura("Camp Benefits", { spellId = 1229741, expires = M.now + 2,
+        tooltip = { "Mana Well: Restores 29 mana per 5 sec." } }) }
+    M.fire("UNIT_AURA", "player") M.flush()
+    eq(st("G-P").choice.blessing, "KINGS")
+    M.units.player.auras = {}                -- gone, but no event
+    st("G-P").nextCampCheck = M.now + 100    -- not due for the periodic check
+    M.now = M.now + 3
+    M.ticker() M.flush()
+    eq(st("G-P").choice.blessing, "WISDOM")
+end)
+test("camp re-check: re-reads are spread out in a full raid", function()
+    local list, saved = {}, ns2.order
+    ns2.order = {}
+    for i = 1, 40 do
+        local g = "R-" .. i
+        ns2.units[g] = { guid = g, aura = { blessings = {}, camps = {}, hasCampBenefits = true } }
+        ns2.order[i] = g
+        list[i] = ns2.units[g]
+    end
+    ns2.CampRefreshTick(M.now)
+    local dirty = 0
+    for _, u in ipairs(list) do if u.dirty then dirty = dirty + 1 end end
+    eq(dirty, 8)                             -- 40 players / 5 s = 8 per tick
+    for i = 1, 40 do ns2.units["R-" .. i] = nil end
+    ns2.order = saved
+end)
 test("integration: /cbb auras prints Camp Benefits lines", function()
     local before = #M.chat
     SlashCmdList.CAMELUSBETTERBLESSINGS("auras party4")

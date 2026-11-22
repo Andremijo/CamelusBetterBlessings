@@ -145,8 +145,14 @@ These come from the WoW client and can't be worked around:
   tooltip has a line per active feature, such as `Fish Bowl: ...`. The real
   stat aura is hidden from addons, so the addon reads that tooltip. If the
   tooltip can't be read, it treats Kings, Might and Wisdom as blocked for
-  that player. Lodestone and Mana Well are matched by their English names,
-  so `/cbb auras` and `/cbb camp add` let you fix them in game if needed.
+  that player.
+- **Camp buffs are tracked as they change.** The addon re-reads a player's
+  buffs whenever the game reports a change. Out of combat it also re-reads a
+  camp buff the moment its timer runs out. On top of that it checks everyone
+  with Camp Benefits every 5 seconds, spread out so a full raid never re-reads
+  at once. So when a camp buff runs out, the blocked blessing becomes available
+  again. For example, a healer who got Kings because of Mana Well shows "swap"
+  and gets Wisdom on the next click.
 
 ## Installing with WoWUp
 
