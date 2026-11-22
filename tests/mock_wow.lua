@@ -41,6 +41,11 @@ M.methods = {
     GetFrameLevel = function() return 1 end,
     GetStringHeight = function() return 12 end,
     SetText = function(self, t) self._text = t end,
+    SetPoint = function(self, point, rel, relPoint, x, y)
+        self._points = self._points or {}
+        self._points[point] = { rel = rel, relPoint = relPoint, x = x, y = y }
+    end,
+    ClearAllPoints = function(self) self._points = {} end,
     GetText = function(self) return self._text end,
     SetTexture = function(self, t) self._texture = t end,
     SetChecked = function(self, v) self._checked = v end,

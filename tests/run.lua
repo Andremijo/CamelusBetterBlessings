@@ -397,6 +397,26 @@ test("bar: no setting changes from the bar", function()
         for _, b in ipairs(cb.flyout.buttons) do assert(not b._hooks.OnMouseUp, "player buttons must not change settings") end
     end
 end)
+test("bar: names never run under the camp icons or the status text", function()
+    -- G-4 (rogue) has a camp buff; Tankwar (G-1) has none at this point.
+    M.units.party4.auras = { M.campBenefits({ "Fish Bowl: +8%", "Mana Well: 29 mp5" }) }
+    M.units.party1.auras = {}
+    M.fire("UNIT_AURA", "party4") M.fire("UNIT_AURA", "party1") M.flush()
+    local withCamp, without = rowFor("G-4"), rowFor("G-1")
+    -- icons sit left of the status text, side by side
+    eq(withCamp.camp[1]._points.RIGHT.rel, withCamp.text)
+    eq(withCamp.camp[2]._points.RIGHT.rel, withCamp.camp[1])
+    -- the name ends at the left-most shown icon
+    eq(withCamp.camp[2]._shown, true)
+    eq(withCamp.name._points.RIGHT.rel, withCamp.camp[2])
+    eq(withCamp.name._points.LEFT.rel, withCamp.role)
+    -- no camp buffs: the name ends at the status text
+    eq(without.name._points.RIGHT.rel, without.text)
+    -- class button camp marker sits beside the Greater icon, not on it
+    local cb = classRow("ROGUE")
+    eq(cb.campMark._points.LEFT.rel, cb.icon2)
+    eq(cb.campMark._points.LEFT.relPoint, "RIGHT")
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)

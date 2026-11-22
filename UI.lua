@@ -23,7 +23,8 @@ local UI = {}
 ns.UI = UI
 
 local BTN_W, BTN_H, GAP = 112, 28, 2
-local FLY_W = 190
+local FLY_W = 210
+local STATUS_W = 38
 local ICON = 22
 local HANDLE = 16
 local MAX_CAMP_ICONS = 2
@@ -233,21 +234,34 @@ local function CreatePlayerButton(flyout, i)
     b.role:SetPoint("LEFT", b.icon1, "RIGHT", 4, 0)
     b.role:SetWidth(34)
     b.role:SetJustifyH("LEFT")
-    b.name = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.name:SetPoint("LEFT", b.role, "RIGHT", 2, 0)
-    b.name:SetWidth(78)
-    b.name:SetJustifyH("LEFT")
-    if b.name.SetWordWrap then b.name:SetWordWrap(false) end
+    -- Right to left: status text (fixed width), camp icons, then the name,
+    -- which ends where the icons begin and is cut short with "..." if needed.
     b.text:SetFontObject("GameFontHighlightSmall")
+    b.text:SetWidth(STATUS_W)
     b.camp = {}
     for j = 1, MAX_CAMP_ICONS do
         local t = b:CreateTexture(nil, "OVERLAY")
-        t:SetSize(14, 14)
-        t:SetPoint("RIGHT", b, "RIGHT", -40 - (j - 1) * 15, 0)
+        t:SetSize(16, 16)
+        if j == 1 then
+            t:SetPoint("RIGHT", b.text, "LEFT", -3, 0)
+        else
+            t:SetPoint("RIGHT", b.camp[j - 1], "LEFT", -2, 0)
+        end
         t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
         t:Hide()
         b.camp[j] = t
     end
+    b.name = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.name:SetJustifyH("LEFT")
+    if b.name.SetWordWrap then b.name:SetWordWrap(false) end
+    b.SetNameEnd = function(self, anchor)
+        if self.nameEnd == anchor then return end
+        self.nameEnd = anchor
+        self.name:ClearAllPoints()
+        self.name:SetPoint("LEFT", self.role, "RIGHT", 2, 0)
+        self.name:SetPoint("RIGHT", anchor, "LEFT", -4, 0)
+    end
+    b:SetNameEnd(b.text)
     b:SetPoint("TOPLEFT", flyout, "TOPLEFT", 0, -(i - 1) * (BTN_H + GAP))
     b:HookScript("OnEnter", function(self)
         UI:CancelFlyoutClose()
@@ -271,8 +285,8 @@ local function CreateClassButton(i)
     b.blockedMark:SetTexture(BLOCKED_ICON)
     b.blockedMark:Hide()
     b.campMark = b:CreateTexture(nil, "OVERLAY")
-    b.campMark:SetSize(12, 12)
-    b.campMark:SetPoint("TOPRIGHT", b.icon2, "TOPRIGHT", 7, 4)
+    b.campMark:SetSize(16, 16)
+    b.campMark:SetPoint("LEFT", b.icon2, "RIGHT", 4, 0)
     b.campMark:SetTexCoord(0.07, 0.93, 0.07, 0.93)
     b.campMark:Hide()
 
@@ -465,10 +479,18 @@ function UI:RefreshPlayerButton(b, canSet)
     b.name:SetText(ShortName(st.name) .. (st.stale and "|cffaaaaaa*|r" or ""))
     b.name:SetTextColor(ClassColor(st.class))
     local camps = st.aura and st.aura.camps or {}
+    local nameEnd = b.text
     for j = 1, MAX_CAMP_ICONS do
         local t, camp = b.camp[j], camps[j]
-        if camp then t:SetTexture(camp.icon or QUESTION) t:Show() else t:Hide() end
+        if camp then
+            t:SetTexture(camp.icon or QUESTION)
+            t:Show()
+            nameEnd = t
+        else
+            t:Hide()
+        end
     end
+    b:SetNameEnd(nameEnd)
     if canSet then
         if c.blessing and st.connected and not st.dead then
             SetSpell(b, ns.BlessingSpell(c.blessing, false), st.unit)
