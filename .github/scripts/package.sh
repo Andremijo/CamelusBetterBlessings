@@ -4,12 +4,14 @@
 #   release.json                                   (BigWigs-packager style metadata, flavor "forever")
 # WoWUp's GitHub provider accepts either a zip ending in -forever.zip / -camelot.zip
 # or a release.json entry with flavor "forever"; we publish both.
-# Usage: .github/scripts/package.sh v1.2.3
+# Usage: .github/scripts/package.sh            (version taken from "## Version:" in the .toc)
+#        .github/scripts/package.sh v1.2.3     (override, e.g. for CI test builds)
 set -euo pipefail
 
 ADDON="CamelusBetterBlessings"
-VERSION="${1:?usage: package.sh <version>}"
 TOC="${ADDON}.toc"
+TOC_VERSION="$(sed -n 's/^## Version:[[:space:]]*//p' "$TOC" | head -n1 | tr -d '\r[:space:]')"
+VERSION="${1:-v${TOC_VERSION#v}}"
 
 if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
   echo "::error::Version '$VERSION' must look like v1.2.3 or v1.2.3-beta.1" >&2
@@ -38,7 +40,7 @@ for f in "$TOC" "${FILES[@]}" Bindings.xml README.md LICENSE; do
   fi
 done
 
-sed -i "s/@project-version@/${VERSION}/g" "dist/${ADDON}/${TOC}"
+sed -i "s/^## Version:.*/## Version: ${VERSION#v}/" "dist/${ADDON}/${TOC}"
 
 (cd dist && zip -qr9 "$ZIP" "$ADDON")
 
