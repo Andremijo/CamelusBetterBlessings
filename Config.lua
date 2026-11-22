@@ -9,12 +9,11 @@ local Logic = ns.Logic
 local Config = {}
 ns.Config = Config
 
-local WIDTH, HEIGHT = 440, 650
+local WIDTH, HEIGHT = 600, 650
 local PAD = 14
 local CONTENT_TOP = -64
-local ROW_H = 20
+local ROW_H = 24
 local SLOT = 20
-local LABEL_W = 170
 local EMPTY = "Interface\\Buttons\\UI-EmptySlot-Disabled"
 
 local OPTIONS = {
@@ -105,29 +104,32 @@ local function PaintSlot(b, key, greater)
     end
 end
 
+-- Two columns of classes, so there is room for spacing without the window
+-- getting taller: rows are ROW_H apart (slots are SLOT tall, so 4 px of air)
+-- and each class starts after CLASS_GAP, with its divider line in the
+-- middle of that gap - never on top of the icons.
+local BLESS_COLUMNS = {
+    { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST" },
+    { "SHAMAN", "MAGE", "WARLOCK", "DRUID" },
+}
+local COL_GAP = 24
+local CLASS_GAP = 12
+
 function Config:BuildBlessingsTab(tab)
     local help = NewLabel(tab, "GameFontHighlightSmall",
         "For each class (and each role it can play): the blessings you give, in order. A later choice is used when an earlier one would replace a camp buff.")
     help:SetPoint("TOPLEFT", 0, 0)
     help:SetWidth(WIDTH - PAD * 2)
 
+    local colW = (WIDTH - PAD * 2 - COL_GAP) / 2
+    local px = colW - ns.MAX_PRIORITY * (SLOT + 8) + 8   -- first priority slot, from the column's left edge
+    local gx = px - SLOT - 18                            -- Greater slot
     local headerY = -34
-    local gx = LABEL_W
-    local px = gx + SLOT + 16
-    local function Header(text, x)
-        local h = NewLabel(tab, "GameFontNormalSmall", text)
-        h:SetPoint("TOPLEFT", tab, "TOPLEFT", x, headerY)
-    end
-    Header("Class / role", 0)
-    Header("Greater", gx - 6)
-    for i = 1, ns.MAX_PRIORITY do Header(tostring(i), px + (i - 1) * (SLOT + 8) + 6) end
-
-    -- One header row per class (icon, name, Greater Blessing). Classes with
-    -- several roles get an indented row per role under it; single-role
-    -- classes keep their blessing slots on the header row itself.
     self.slotRows = {}
-    local y = headerY - 16
-    local function Slots(row, class, role, rowY)
+    self.dividers = {}
+    local lowest = headerY
+
+    local function Slots(row, class, role, ox, rowY)
         for i = 1, ns.MAX_PRIORITY do
             local sb = MakeSlot(tab, function(btn, dir)
                 local cur = Logic.GetPriority(ns.db.assign, class, role)
@@ -139,58 +141,76 @@ function Config:BuildBlessingsTab(tab)
             end)
             sb.slot = i
             sb.class, sb.role = class, role
-            sb:SetPoint("TOPLEFT", tab, "TOPLEFT", px + (i - 1) * (SLOT + 8), rowY)
+            sb:SetPoint("TOPLEFT", tab, "TOPLEFT", ox + px + (i - 1) * (SLOT + 8), rowY)
             row.slots[i] = sb
         end
     end
-    for ci, class in ipairs(ns.CLASS_ORDER) do
-        local roles = ns.CLASS_ROLES[class]
-        local single = #roles == 1
-        if ci > 1 then
-            local line = tab:CreateTexture(nil, "ARTWORK")
-            line:SetColorTexture(1, 1, 1, 0.15)
-            line:SetHeight(1)
-            line:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y + 2)
-            line:SetPoint("TOPRIGHT", tab, "TOPRIGHT", 0, y + 2)
+
+    for colIndex, classes in ipairs(BLESS_COLUMNS) do
+        local ox = (colIndex - 1) * (colW + COL_GAP)
+        local function Header(text, x)
+            local h = NewLabel(tab, "GameFontNormalSmall", text)
+            h:SetPoint("TOPLEFT", tab, "TOPLEFT", ox + x, headerY)
         end
-        -- class header
-        local header = { class = class, slots = {}, isHeader = true }
-        local icon = tab:CreateTexture(nil, "ARTWORK")
-        icon:SetSize(16, 16)
-        icon:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y - 2)
-        ns.SetClassIcon(icon, class)
-        local name = NewLabel(tab, "GameFontNormal", ns.ClassLabel(class))
-        name:SetPoint("LEFT", icon, "RIGHT", 5, 0)
-        name:SetTextColor(ns.ClassColor(class))
-        header.label = name
-        local gb = MakeSlot(tab, function(btn, dir)
-            ns.db.greater[class] = Logic.CycleBlessing(ns.GetGreater(class), dir, true)
-            Config:Refresh() Changed() SlotTooltip(btn)
-        end)
-        gb.isGreater = true
-        gb:SetPoint("TOPLEFT", tab, "TOPLEFT", gx, y)
-        header.greater = gb
-        if single then
-            header.role = roles[1]
-            Slots(header, class, roles[1], y)
-        end
-        self.slotRows[#self.slotRows + 1] = header
-        y = y - ROW_H
-        -- role sub-rows
-        if not single then
-            for _, role in ipairs(roles) do
-                local row = { class = class, role = role, slots = {} }
-                local rc = ns.ROLE_INFO[role].color
-                local label = NewLabel(tab, "GameFontHighlightSmall", Logic.RoleLabel(class, role))
-                label:SetPoint("TOPLEFT", tab, "TOPLEFT", 22, y - 4)
-                label:SetTextColor(rc[1], rc[2], rc[3])
-                row.label = label
-                Slots(row, class, role, y)
-                self.slotRows[#self.slotRows + 1] = row
-                y = y - ROW_H
+        Header("Class / role", 0)
+        Header("Greater", gx - 8)
+        for i = 1, ns.MAX_PRIORITY do Header(tostring(i), px + (i - 1) * (SLOT + 8) + 6) end
+
+        local y = headerY - 18
+        for ci, class in ipairs(classes) do
+            local roles = ns.CLASS_ROLES[class]
+            local single = #roles == 1
+            if ci > 1 then
+                -- divider in the middle of the gap between two classes
+                y = y - CLASS_GAP
+                local line = tab:CreateTexture(nil, "ARTWORK")
+                line:SetColorTexture(1, 1, 1, 0.15)
+                line:SetHeight(1)
+                line:SetPoint("TOPLEFT", tab, "TOPLEFT", ox, y + CLASS_GAP / 2 + 2)
+                line:SetWidth(colW)
+                self.dividers[#self.dividers + 1] = { tex = line, x = ox, y = y + CLASS_GAP / 2 + 2, w = colW }
+            end
+            -- class header
+            local header = { class = class, slots = {}, isHeader = true }
+            local icon = tab:CreateTexture(nil, "ARTWORK")
+            icon:SetSize(16, 16)
+            icon:SetPoint("TOPLEFT", tab, "TOPLEFT", ox, y - 2)
+            ns.SetClassIcon(icon, class)
+            local name = NewLabel(tab, "GameFontNormal", ns.ClassLabel(class))
+            name:SetPoint("LEFT", icon, "RIGHT", 5, 0)
+            name:SetTextColor(ns.ClassColor(class))
+            header.label = name
+            local gb = MakeSlot(tab, function(btn, dir)
+                ns.db.greater[class] = Logic.CycleBlessing(ns.GetGreater(class), dir, true)
+                Config:Refresh() Changed() SlotTooltip(btn)
+            end)
+            gb.isGreater = true
+            gb:SetPoint("TOPLEFT", tab, "TOPLEFT", ox + gx, y)
+            header.greater = gb
+            if single then
+                header.role = roles[1]
+                Slots(header, class, roles[1], ox, y)
+            end
+            self.slotRows[#self.slotRows + 1] = header
+            y = y - ROW_H
+            -- role sub-rows
+            if not single then
+                for _, role in ipairs(roles) do
+                    local row = { class = class, role = role, slots = {} }
+                    local rc = ns.ROLE_INFO[role].color
+                    local label = NewLabel(tab, "GameFontHighlightSmall", Logic.RoleLabel(class, role))
+                    label:SetPoint("TOPLEFT", tab, "TOPLEFT", ox + 22, y - 4)
+                    label:SetTextColor(rc[1], rc[2], rc[3])
+                    row.label = label
+                    Slots(row, class, role, ox, y)
+                    self.slotRows[#self.slotRows + 1] = row
+                    y = y - ROW_H
+                end
             end
         end
+        lowest = math.min(lowest, y)
     end
+    local y = lowest
 
     local reset = SmallButton(tab, "Reset to defaults", 140)
     reset:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, y - 8)

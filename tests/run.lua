@@ -598,6 +598,35 @@ test("players tab: a raid is shown in Group 1-8 boxes, like the raid window", fu
     eq(cfg.groupBoxes[1]._shown, true)
     eq(cfg.groupBoxes[2]._shown, false)                        -- party: only Group 1
 end)
+test("settings: blessing rows have air and dividers never touch an icon", function()
+    ns2.Config:Toggle("blessings")
+    local slots = {}
+    for _, r in ipairs(ns2.Config.slotRows) do
+        if r.greater then slots[#slots + 1] = r.greater end
+        for _, b in ipairs(r.slots) do slots[#slots + 1] = b end
+    end
+    -- two slots in the same column are on the same row or at least a slot + 4 px apart
+    for i = 1, #slots do
+        for j = i + 1, #slots do
+            local a, b = slots[i]._points.TOPLEFT, slots[j]._points.TOPLEFT
+            if a.x == b.x and a.y ~= b.y then
+                assert(math.abs(a.y - b.y) >= 24, string.format("rows too close: %d vs %d", a.y, b.y))
+            end
+        end
+    end
+    -- no divider line crosses any 20 px tall slot in its column
+    assert(#ns2.Config.dividers > 0)
+    for _, d in ipairs(ns2.Config.dividers) do
+        for _, sl in ipairs(slots) do
+            local p = sl._points.TOPLEFT
+            if p.x >= d.x and p.x < d.x + d.w then
+                local top, bottom = p.y, p.y - 20
+                assert(not (d.y <= top and d.y >= bottom), string.format("divider at %d crosses a slot at %d", d.y, top))
+                assert(math.abs(d.y - top) >= 4 and math.abs(d.y - bottom) >= 4, "divider too close to a slot")
+            end
+        end
+    end
+end)
 test("integration: config clicks", function()
     ns2.Config:Toggle("blessings")
     local row, header
