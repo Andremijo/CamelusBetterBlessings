@@ -580,7 +580,10 @@ function ns.EvaluateUnit(st)
     st.connected = UnitIsConnected(unit) and true or false
     st.dead = UnitIsDeadOrGhost(unit) and true or false
 
-    if st.dirty and not ns.InCombat() then
+    -- Auras are read in combat too (WoW Forever allows it for group members;
+    -- if the client ever hides them, ScanUnit says so and we keep the last
+    -- known state).
+    if st.dirty then
         local scan = ns.ScanUnit(unit)
         if scan.ok then
             st.aura = scan
@@ -773,10 +776,10 @@ end
 
 function ns.Update()
     if not ns.db or not ns.isPaladin then return end
-    -- Aura data is restricted in combat and secure buttons cannot be changed:
-    -- freeze until combat ends (PLAYER_REGEN_ENABLED triggers a full update).
-    if ns.InCombat() then return end
-    if ns.needRoster then
+    -- In combat the roster/layout and what each button casts are frozen
+    -- (Blizzard does not let addons change secure buttons in combat), but
+    -- buffs, colours and timers still update live.
+    if ns.needRoster and not ns.InCombat() then
         ns.needRoster = false
         ns.RebuildRoster()
         if ns.UI then ns.UI:Layout() end
@@ -817,8 +820,7 @@ function handlers.PLAYER_LOGIN()
     if ns.Config then ns.Config:RegisterSettingsPanel() end
     ns.RequestUpdate(true)
     C_Timer.NewTicker(1, function()
-        if ns.InCombat() then return end
-        ProcessInspectQueue()
+        if not ns.InCombat() then ProcessInspectQueue() end
         ns.CampRefreshTick()
         ns.Update()
     end)

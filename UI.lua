@@ -809,6 +809,14 @@ function UI:PlayerTooltip(b)
     end
     if st.ppAssigned then tt:AddLine("Pally Power assigns you " .. BlessingShort(st.ppAssigned) .. " here.", 0.6, 0.8, 1) end
     if st.stale then tt:AddLine("* buff info is from before combat", 0.6, 0.6, 0.6) end
+    if InCombatLockdown() then
+        local set = b:GetAttribute("spell1")
+        local want = c.blessing and ns.BlessingSpell(c.blessing, false)
+        if set ~= want then
+            tt:AddLine(string.format("In combat this button still casts %s; it updates after combat.",
+                set or "nothing"), 1, 0.6, 0.3, true)
+        end
+    end
     tt:AddLine("Roles and priorities: /cbb config", 0.5, 0.8, 1)
     tt:Show()
 end

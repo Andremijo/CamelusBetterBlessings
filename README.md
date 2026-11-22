@@ -98,8 +98,13 @@ weaving, so set it in the Players tab.
   Blessings*. It blesses the next player who needs it, tanks first. It works
   without being on the bar, but the Options tab can show it there.
 
-In combat the bar freezes and player flyouts don't open. Blizzard doesn't allow
-addon buttons to change in combat. Everything updates again when combat ends.
+In combat the bar keeps updating: buffs, colours and timers change live, so
+you see right away when someone loses a blessing. Two things wait until combat
+ends, because Blizzard doesn't let addons change click-to-cast buttons in
+combat:
+- what each button casts, so a click casts what was set up before the pull
+  (the player's tooltip says so if their pick changed mid-fight)
+- the layout, including player flyouts opening
 
 **All setup happens in the settings window** (the gear, `/cbb config`, or
 Settings → AddOns):
@@ -138,8 +143,8 @@ Settings → AddOns):
     buff, your own lists are used.
   - With **Respect other paladins** on, a blessing another paladin is assigned
     to give a player counts as taken, so you pick your next one for them.
-  - WoW Forever can hold back addon messages during boss fights; the
-    assignments update once that ends.
+  - WoW Forever can hold back addon messages during fights. A request that
+    goes out in combat is sent once more when combat ends, so it isn't lost.
 - **Options tab:** camp buff protection, Greater Blessing blocking, respecting
   other paladins, target warning, tooltips, smart button, bar lock and scale,
   and the refresh warning time.
@@ -172,9 +177,10 @@ missing one by the name its line starts with, for example
 These come from the WoW client and can't be worked around:
 
 - **Combat lockdown.** Blizzard does not let addons change click-to-cast
-  buttons in combat, and WoW Forever hides aura data from addons in combat. The
-  bar freezes when combat starts, keeping what it knew before the pull, and
-  updates when combat ends. Blessings go out between pulls anyway.
+  buttons in combat. Buffs and timers still update live, but what each button
+  casts is fixed at the pull and catches up when combat ends. If WoW Forever
+  ever hides a player's buffs in combat, the addon keeps what it saw last
+  (marked with `*`).
 - **Action bars can't be blocked.** No addon can stop a spell cast from the
   default action bars. Only this addon's buttons and smart button block. The
   target warning covers the rest.
