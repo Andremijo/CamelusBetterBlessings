@@ -442,9 +442,9 @@ test("bar: class button shows every distinct camp buff, and widens only when nee
     eq(cb.campMarks[2]._shown, true) eq(cb.campMarks[2]._texture, "item:279956")
     eq(cb.campMarks[3]._shown, false)
     eq(cb.campMarks[2]._points.LEFT.rel, cb.campMarks[1])
-    -- two icons don't fit in 88: every class button widens together
+    -- two icons need more room than one: every class button widens together
     local w = ns2.UI:ButtonWidth(2)
-    assert(w > 88, "should widen for two icons")
+    assert(w > ns2.UI:ButtonWidth(1), "should widen for two icons")
     for _, b in ipairs(ns2.UI.classButtons) do if b._shown then eq(b._width, w) end end
     -- shamans: Elly and Enhy both with Mana Well -> shown once
     M.units.party2.auras = { M.campBenefits({ "Mana Well: 29 mp5" }) }
@@ -455,8 +455,7 @@ test("bar: class button shows every distinct camp buff, and widens only when nee
     -- back to one camp buff anywhere: width returns to 88
     M.units.party4.auras = { M.campBenefits({ "Fish Bowl: +8%" }) }
     M.fire("UNIT_AURA", "party4") M.flush()
-    eq(ns2.UI:ButtonWidth(1), 88)
-    eq(cb._width, 88)
+    eq(cb._width, ns2.UI:ButtonWidth(1))     -- back to the one-icon width
     -- restore the scenario's buffs for later tests
     M.units.party3.auras = { M.campBenefits({ "Camp Benefits", "Lodestone: Melee attack power increased by 90.", "Camp Chair: +1% crit" }) }
     M.fire("UNIT_AURA", "party3") M.flush()
@@ -508,6 +507,34 @@ test("bar: left-click = Greater, right-click = next player in the class, own ble
     M.units.party2.auras = { M.campBenefits({ "Camp Benefits", "Mana Well: Restores 29 mana per 5 sec." }) }
     M.units.party3.auras = { M.campBenefits({ "Camp Benefits", "Lodestone: Melee attack power increased by 90.", "Camp Chair: +1% crit" }) }
     M.fire("UNIT_AURA", "party2") M.fire("UNIT_AURA", "party3") M.flush()
+end)
+test("bar: Pally Power style timers, counting down in combat too", function()
+    eq(L.FormatClock(3364), "56:04")
+    eq(L.FormatClock(59), "0:59")
+    eq(L.FormatClock(3900), "1h05")
+    -- my Kings on Tankwar with 56:04 left, my Might on Stabby with 10:00 left
+    M.units.party1.auras = { M.aura("Blessing of Kings", { mine = true, expires = M.now + 3364 }) }
+    M.units.party4.auras = { M.aura("Blessing of Might", { mine = true, expires = M.now + 600 }) }
+    M.fire("UNIT_AURA", "party1") M.fire("UNIT_AURA", "party4") M.flush()
+    local war, rogue = classRow("WARRIOR"), classRow("ROGUE")
+    assert(war.text._text:find("56:04", 1, true), war.text._text)
+    assert(rogue.text._text:find("10:00", 1, true), rogue.text._text)
+    assert(rowFor("G-1").text._text:find("56:04", 1, true), rowFor("G-1").text._text)
+    -- the class button has room for the timer
+    assert(war._width >= ns2.UI:ButtonWidth(0))
+    -- in combat nothing is re-read, but the countdown keeps going
+    M.combat = true
+    M.now = M.now + 65
+    ns2.UI:UpdateTimers()
+    assert(war.text._text:find("54:59", 1, true), war.text._text)
+    assert(rowFor("G-1").text._text:find("54:59", 1, true), rowFor("G-1").text._text)
+    M.combat = false
+    -- a class where I have no blessing shows no timer
+    M.units.party4.auras = {}
+    M.fire("UNIT_AURA", "party4") M.flush()
+    eq(classRow("ROGUE").text._text, "")
+    M.units.party1.auras = {}
+    M.fire("UNIT_AURA", "party1") M.flush()
 end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")

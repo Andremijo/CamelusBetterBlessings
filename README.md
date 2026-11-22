@@ -70,6 +70,10 @@ weaving, so set it in the Players tab.
   - green: everyone has theirs
   - yellow: a blessing is running out soon
   - grey: the players who need one are out of range or dead
+- **Timers, like Pally Power:** a class button counts down the shortest time
+  left on your blessings in that class (for example `56:04`), and each player
+  in the flyout shows their own countdown. They turn yellow when it is time to
+  refresh, and keep counting in combat.
 - **Left-click a class button** to cast its Greater Blessing. A red ✕ over the
   icon means it is blocked because it would replace someone's camp buff.
 - **Right-click a class button** to bless the next player of that class who

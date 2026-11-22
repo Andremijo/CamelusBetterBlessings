@@ -35,6 +35,7 @@ local MAX_CAMP_MARKS, MARK_SIZE, MARK_GAP = 3, 16, 2
 local FLY_GAP = 2 -- horizontal space between a class button and its flyout
 local FLY_W = 210
 local STATUS_W = 38
+local TIMER_W = 36 -- class button countdown
 local ICON = 24
 local HANDLE = 16
 local MAX_CAMP_ICONS = 2
@@ -240,6 +241,7 @@ function UI:Create()
     self.footer = footer
 
     self.classButtons = {}
+    C_Timer.NewTicker(1, function() UI:UpdateTimers() end)
     self:ApplyScale()
     self:Layout()
     self:UpdateVisibility()
@@ -301,6 +303,7 @@ local function CreateClassButton(i)
     b.blockedMark:SetAllPoints(b.icon2)
     b.blockedMark:SetTexture(BLOCKED_ICON)
     b.blockedMark:Hide()
+    b.text:SetWidth(TIMER_W)
     b.campMarks = {}
     for j = 1, MAX_CAMP_MARKS do
         local t = b:CreateTexture(nil, "OVERLAY")
@@ -472,16 +475,30 @@ end
 ---------------------------------------------------------------------------
 -- refresh (visuals any time, secure attributes only out of combat)
 ---------------------------------------------------------------------------
+-- Seconds left on MY blessing on this player (any type), or nil.
+local function MyRemaining(st)
+    local now = GetTime()
+    for _, info in pairs(st and st.aura and st.aura.blessings or {}) do
+        if info.mine and info.expires then return math.max(0, info.expires - now) end
+    end
+    return nil
+end
+UI.MyRemaining = MyRemaining
+
+local function TimerColor(sec)
+    if sec and sec <= (ns.opt.refreshMinutes or 5) * 60 then return "|cffffd040" end
+    return "|cffffffff"
+end
+
 local function PlayerStatus(st)
     local c = st.choice or { status = "NONE" }
     if not st.connected then return "FAR", "offline" end
     if st.dead then return "FAR", "dead" end
     if st.isPending then return "PENDING", "..." end
     local key, label = c.status, ""
-    if c.status == "OK" then
-        label = c.remaining and Logic.FormatTime(c.remaining) or ""
-    elseif c.status == "REFRESH" then
-        label = Logic.FormatTime(c.remaining)
+    if c.status == "OK" or c.status == "REFRESH" then
+        local left = MyRemaining(st) or c.remaining
+        label = left and (TimerColor(left) .. Logic.FormatClock(left) .. "|r") or ""
     elseif c.status == "MISSING" then
         label = "!"
     elseif c.status == "SWAP" then
@@ -587,7 +604,7 @@ function UI:RefreshClassButton(cb, canSet)
     elseif info.need > 0 then key = "FAR"
     else key = "OK" end
     Paint(cb, key)
-    cb.text:SetText("")
+    self:UpdateClassTimer(cb)
     for _, pb in ipairs(cb.flyout.buttons) do
         if pb.guid then self:RefreshPlayerButton(pb, canSet) end
     end
@@ -666,8 +683,38 @@ end
 -- Same width for every class button: wide enough for the class showing the
 -- most camp icons, never narrower than BTN_W. Out of combat only.
 function UI:ButtonWidth(marks)
-    local needed = 4 + ICON + 3 + ICON + 4 + marks * (MARK_SIZE + MARK_GAP) + 4
+    local needed = 4 + ICON + 3 + ICON + 4 + marks * (MARK_SIZE + MARK_GAP) + TIMER_W + 6
     return math.max(BTN_W, needed)
+end
+
+-- Like Pally Power: the class button counts down the shortest time left on
+-- my blessings in that class.
+function UI:UpdateClassTimer(cb)
+    if not cb.class then cb.text:SetText("") return end
+    local least
+    for _, st in ipairs(ns.ClassMembers(cb.class)) do
+        local left = MyRemaining(st)
+        if left and (not least or left < least) then least = left end
+    end
+    cb.text:SetText(least and (TimerColor(least) .. Logic.FormatClock(least) .. "|r") or "")
+end
+
+-- Every second, also in combat: only text changes (allowed on secure
+-- buttons), from expiry times already known - no aura reads.
+function UI:UpdateTimers()
+    if not self.main or not self.main:IsShown() then return end
+    for i = 1, self.numClasses or 0 do
+        local cb = self.classButtons[i]
+        self:UpdateClassTimer(cb)
+        for _, pb in ipairs(cb.flyout.buttons) do
+            local st = pb.guid and ns.units[pb.guid]
+            if st and st.choice and (st.choice.status == "OK" or st.choice.status == "REFRESH")
+                and st.connected and not st.dead and not st.isPending then
+                local left = MyRemaining(st)
+                if left then pb.text:SetText(TimerColor(left) .. Logic.FormatClock(left) .. "|r") end
+            end
+        end
+    end
 end
 
 function UI:FitWidth()
