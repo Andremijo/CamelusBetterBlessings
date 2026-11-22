@@ -1,0 +1,78 @@
+name: Release
+
+# Creates a GitHub release that WoWUp's "Install from URL" can find.
+#   - Push a tag:      git tag v1.0.0 && git push origin v1.0.0
+#   - Or run manually: Actions > Release > Run workflow, enter v1.0.0
+# Tags with a suffix (v1.1.0-beta.1) become pre-releases: WoWUp only offers
+# those to users on its Beta/Alpha channel.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. v1.0.0). The tag is created on the selected branch."
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION="$INPUT_VERSION"
+          else
+            VERSION="$GITHUB_REF_NAME"
+          fi
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::'$VERSION' is not a valid version (expected v1.2.3 or v1.2.3-beta.1)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Install Lua 5.1
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq lua5.1
+
+      - name: Syntax check and tests
+        run: |
+          for f in *.lua tests/*.lua; do luac5.1 -p "$f"; done
+          lua5.1 tests/run.lua
+
+      - name: Package
+        id: package
+        run: .github/scripts/package.sh "${{ steps.version.outputs.version }}" | tee package.log
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          ZIP="dist/CamelusBetterBlessings-${VERSION}-forever.zip"
+          FLAGS=()
+          if [ "$PRERELEASE" = "true" ]; then FLAGS+=(--prerelease); fi
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION exists - replacing its files."
+            gh release upload "$VERSION" "$ZIP" dist/release.json --clobber
+          else
+            gh release create "$VERSION" "$ZIP" dist/release.json \
+              --title "Camelus' Better Blessings ${VERSION}" \
+              --target "$GITHUB_SHA" \
+              --generate-notes \
+              "${FLAGS[@]}"
+          fi
