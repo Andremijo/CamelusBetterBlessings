@@ -414,8 +414,36 @@ test("bar: names never run under the camp icons or the status text", function()
     eq(without.name._points.RIGHT.rel, without.text)
     -- class button camp marker sits beside the Greater icon, not on it
     local cb = classRow("ROGUE")
-    eq(cb.campMark._points.LEFT.rel, cb.icon2)
-    eq(cb.campMark._points.LEFT.relPoint, "RIGHT")
+    eq(cb.campMarks[1]._points.LEFT.rel, cb.icon2)
+    eq(cb.campMarks[1]._points.LEFT.relPoint, "RIGHT")
+end)
+test("bar: class button shows every distinct camp buff, and widens only when needed", function()
+    -- rogue (G-4) has Fish Bowl + Mana Well: both icons on the class button
+    M.units.party4.auras = { M.campBenefits({ "Fish Bowl: +8%", "Mana Well: 29 mp5" }) }
+    M.fire("UNIT_AURA", "party4") M.flush()
+    local cb = classRow("ROGUE")
+    eq(cb.campMarks[1]._shown, true) eq(cb.campMarks[1]._texture, "item:279967")
+    eq(cb.campMarks[2]._shown, true) eq(cb.campMarks[2]._texture, "item:279956")
+    eq(cb.campMarks[3]._shown, false)
+    eq(cb.campMarks[2]._points.LEFT.rel, cb.campMarks[1])
+    -- two icons don't fit in 88: every class button widens together
+    local w = ns2.UI:ButtonWidth(2)
+    assert(w > 88, "should widen for two icons")
+    for _, b in ipairs(ns2.UI.classButtons) do if b._shown then eq(b._width, w) end end
+    -- shamans: Elly and Enhy both with Mana Well -> shown once
+    M.units.party2.auras = { M.campBenefits({ "Mana Well: 29 mp5" }) }
+    M.units.party3.auras = { M.campBenefits({ "Mana Well: 29 mp5" }) }
+    M.fire("UNIT_AURA", "party2") M.fire("UNIT_AURA", "party3") M.flush()
+    local sh = classRow("SHAMAN")
+    eq(sh.campMarks[1]._shown, true) eq(sh.campMarks[2]._shown, false)
+    -- back to one camp buff anywhere: width returns to 88
+    M.units.party4.auras = { M.campBenefits({ "Fish Bowl: +8%" }) }
+    M.fire("UNIT_AURA", "party4") M.flush()
+    eq(ns2.UI:ButtonWidth(1), 88)
+    eq(cb._width, 88)
+    -- restore the scenario's buffs for later tests
+    M.units.party3.auras = { M.campBenefits({ "Camp Benefits", "Lodestone: Melee attack power increased by 90.", "Camp Chair: +1% crit" }) }
+    M.fire("UNIT_AURA", "party3") M.flush()
 end)
 test("bar: rows are packed tight like Pally Power", function()
     local shown = {}
@@ -423,7 +451,8 @@ test("bar: rows are packed tight like Pally Power", function()
     assert(#shown >= 2, "need two class rows")
     local y1, y2 = shown[1]._points.TOPLEFT.y, shown[2]._points.TOPLEFT.y
     eq(y1 - y2, 29)                     -- 30 tall, overlapping by 1 => ~2 visible units apart
-    eq(shown[1]._width, 88)
+    eq(shown[1]._width, ns2.UI.buttonWidth)  -- 88, or wider while a class shows several camp icons
+    assert(ns2.UI.buttonWidth >= 88)
     -- flyout rows use the same spacing
     local fb = shown[1].flyout.buttons
     if fb[2] then eq(fb[1]._points.TOPLEFT.y - fb[2]._points.TOPLEFT.y, 29) end
