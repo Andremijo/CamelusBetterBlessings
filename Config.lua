@@ -24,6 +24,7 @@ local OPTIONS = {
     { key = "warnTarget",     label = "Warn about my target's camp buffs",    tip = "Shows a line under the bar listing which blessings would overwrite a camp buff on your target (covers casts from your action bars too)." },
     { key = "tooltip",        label = "Show camp buffs in unit tooltips" },
     { key = "showSmart",      label = "Show the smart button on the bar",     tip = "The smart button blesses the next player who needs it. Its key binding (Key Bindings > AddOns) works even when it is hidden." },
+    { key = "followPP",       label = "Follow my Pally Power assignments",    tip = "When another paladin assigns you blessings in Pally Power, those come first. Camp buff protection still applies: if the assigned blessing would replace a camp buff, your own lists are used." },
     { key = "showSolo",       label = "Show the bar when not in a group" },
     { key = "locked",         label = "Lock the bar's position" },
 }
@@ -379,6 +380,142 @@ function Config:RefreshPlayers(force)
 end
 
 ---------------------------------------------------------------------------
+-- Pally Power tab (read-only view of the group's Pally Power assignments)
+---------------------------------------------------------------------------
+local PP_NAME_W = 118
+local PP_CELL = 30
+local PP_ROW_H = 26
+
+local function PPCellTooltip(cell)
+    local PPm = ns.PP
+    if not PPm or not cell.paladin then return end
+    local class = PPm.CLASS_BY_ID[cell.cid]
+    GameTooltip:SetOwner(cell, "ANCHOR_RIGHT")
+    local b = PPm.BlessingFor(cell.paladin, class, nil)
+    GameTooltip:AddLine(string.format("%s: %s", ns.ShortName(cell.paladin), ns.ClassLabel(class)))
+    GameTooltip:AddLine(b and (ns.BlessingSpell(b, false) or b) or "Nothing assigned", 1, 1, 1)
+    local d = PPm.Data()
+    local n = d.normal[cell.paladin] and d.normal[cell.paladin][cell.cid]
+    if n and next(n) then
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Single-player assignments:", 0.6, 0.8, 1)
+        for target, idx in pairs(n) do
+            local nb = PPm.BLESSING_BY_ID[idx]
+            GameTooltip:AddDoubleLine("  " .. ns.ShortName(target), nb and ns.BlessingShort(nb) or "?", 1, 1, 1, 1, 0.82, 0)
+        end
+    end
+    GameTooltip:Show()
+end
+
+function Config:BuildPallyPowerTab(tab)
+    local help = NewLabel(tab, "GameFontHighlightSmall",
+        "Assignments made in Pally Power (or a compatible addon) by the paladins in your group. Read-only: this addon listens but never sends its own assignments.")
+    help:SetPoint("TOPLEFT", 0, 0)
+    help:SetWidth(WIDTH - PAD * 2)
+
+    self.ppStatus = NewLabel(tab, "GameFontNormalSmall")
+    self.ppStatus:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -36)
+    self.ppStatus:SetWidth(WIDTH - PAD * 2)
+
+    local headerY = -60
+    for cid = 1, 9 do
+        local icon = tab:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(18, 18)
+        icon:SetPoint("TOPLEFT", tab, "TOPLEFT", PP_NAME_W + (cid - 1) * PP_CELL + 2, headerY)
+        ns.SetClassIcon(icon, ns.PP and ns.PP.CLASS_BY_ID[cid])
+    end
+    self.ppRows = {}
+    self.ppTab = tab
+    self.ppFirstY = headerY - 24
+
+    local req = SmallButton(tab, "Request update", 140)
+    req:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 4)
+    req:SetScript("OnClick", function()
+        if ns.PP and ns.PP.Request(true) then ns.Print("asked the group for their Pally Power assignments.")
+        else ns.Print("you need to be in a group to ask for Pally Power assignments.") end
+    end)
+end
+
+local function MakePPRow(tab, i, firstY)
+    local row = CreateFrame("Frame", nil, tab)
+    row:SetSize(PP_NAME_W + 9 * PP_CELL, PP_ROW_H)
+    row:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, firstY - (i - 1) * PP_ROW_H)
+    row.bg = row:CreateTexture(nil, "BACKGROUND")
+    row.bg:SetAllPoints()
+    row.bg:SetColorTexture(1, 1, 1, 0)
+    row.name = NewLabel(row, "GameFontHighlight")
+    row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+    row.name:SetWidth(PP_NAME_W - 8)
+    if row.name.SetWordWrap then row.name:SetWordWrap(false) end
+    row.cells = {}
+    for cid = 1, 9 do
+        local cell = CreateFrame("Frame", nil, row)
+        cell:SetSize(22, 22)
+        cell:SetPoint("LEFT", row, "LEFT", PP_NAME_W + (cid - 1) * PP_CELL, 0)
+        cell:EnableMouse(true)
+        cell.icon = cell:CreateTexture(nil, "ARTWORK")
+        cell.icon:SetAllPoints()
+        cell.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        cell.plus = NewLabel(cell, "GameFontGreenSmall", "+")
+        cell.plus:SetPoint("BOTTOMRIGHT", cell, "BOTTOMRIGHT", 3, -3)
+        cell.cid = cid
+        cell:SetScript("OnEnter", PPCellTooltip)
+        cell:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        row.cells[cid] = cell
+    end
+    return row
+end
+
+function Config:RefreshPallyPower()
+    if not self.ppRows or not ns.PP then return end
+    if self.frame and not self.frame:IsShown() then return end
+    local PPm = ns.PP
+    local list = PPm.Paladins()
+    local d = PPm.Data()
+    local others = 0
+    for _, p in ipairs(list) do if not p.isMe then others = others + 1 end end
+    local status
+    if not IsInGroup() then
+        status = "|cffaaaaaaJoin a group to see Pally Power assignments.|r"
+    elseif #list == 0 then
+        status = "|cffaaaaaaNo Pally Power assignments seen in this group yet.|r"
+    else
+        status = string.format("%d paladin%s with Pally Power assignments.", #list, #list == 1 and "" or "s")
+    end
+    if ns.opt.followPP then
+        status = status .. "  |cff60ff60Following your assignments.|r"
+    else
+        status = status .. "  |cffff8060Not following (see Options).|r"
+    end
+    self.ppStatus:SetText(status)
+
+    for i, p in ipairs(list) do
+        local row = self.ppRows[i] or MakePPRow(self.ppTab, i, self.ppFirstY)
+        self.ppRows[i] = row
+        row.name:SetText(ns.ShortName(p.name) .. (p.isMe and " |cff60ff60(you)|r" or ""))
+        row.name:SetTextColor(ns.ClassColor("PALADIN"))
+        row.bg:SetColorTexture(1, 1, 1, p.isMe and 0.08 or 0)
+        for cid = 1, 9 do
+            local cell = row.cells[cid]
+            cell.paladin = p.name
+            local b = PPm.BlessingFor(p.name, PPm.CLASS_BY_ID[cid], nil)
+            if b and ns.BLESSINGS[b] then
+                cell.icon:SetTexture(ns.BlessingTexture(b, true))
+                cell.icon:Show()
+            else
+                cell.icon:SetTexture(EMPTY)
+                cell.icon:Show()
+            end
+            local n = d.normal[p.name] and d.normal[p.name][cid]
+            cell.plus:SetShown(n and next(n) ~= nil or false)
+        end
+        row:Show()
+    end
+    for i = #list + 1, #self.ppRows do self.ppRows[i]:Hide() end
+    self.ppList = list
+end
+
+---------------------------------------------------------------------------
 -- Options tab
 ---------------------------------------------------------------------------
 local function Stepper(tab, y, label, get, set, step, min, max, fmt)
@@ -439,9 +576,10 @@ end
 -- window
 ---------------------------------------------------------------------------
 local TABS = {
-    { key = "blessings", label = "Blessings" },
-    { key = "players",   label = "Players" },
-    { key = "options",   label = "Options" },
+    { key = "blessings",  label = "Blessings" },
+    { key = "players",    label = "Players" },
+    { key = "pallypower", label = "Pally Power" },
+    { key = "options",    label = "Options" },
 }
 
 function Config:Create()
@@ -477,8 +615,8 @@ function Config:Create()
 
     self.tabFrames, self.tabButtons = {}, {}
     for i, t in ipairs(TABS) do
-        local b = SmallButton(f, t.label, 100)
-        b:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + (i - 1) * 104, -34)
+        local b = SmallButton(f, t.label, 98)
+        b:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + (i - 1) * 103, -34)
         b:SetScript("OnClick", function() Config:ShowTab(t.key) end)
         self.tabButtons[t.key] = b
         local tab = CreateFrame("Frame", nil, f)
@@ -489,6 +627,7 @@ function Config:Create()
     end
     self:BuildBlessingsTab(self.tabFrames.blessings)
     self:BuildPlayersTab(self.tabFrames.players)
+    self:BuildPallyPowerTab(self.tabFrames.pallypower)
     self:BuildOptionsTab(self.tabFrames.options)
 
     f:SetScript("OnShow", function() Config:Refresh() end)
@@ -516,6 +655,7 @@ function Config:Refresh()
     for _, cb in ipairs(self.checks) do cb:SetChecked(ns.opt[cb.key] and true or false) end
     for _, update in ipairs(self.steppers) do update() end
     if self.activeTab == "players" then self:RefreshPlayers(true) end
+    if self.activeTab == "pallypower" then self:RefreshPallyPower() end
 end
 
 function Config:Toggle(tab)
