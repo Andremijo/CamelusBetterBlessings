@@ -105,9 +105,6 @@ function M.install()
         [19740] = "Blessing of Might", [25782] = "Greater Blessing of Might",
         [19742] = "Blessing of Wisdom", [25894] = "Greater Blessing of Wisdom",
         [20217] = "Blessing of Kings", [25898] = "Greater Blessing of Kings",
-        [1038] = "Blessing of Salvation", [25895] = "Greater Blessing of Salvation",
-        [19977] = "Blessing of Light", [25890] = "Greater Blessing of Light",
-        [20911] = "Blessing of Sanctuary", [25899] = "Greater Blessing of Sanctuary",
     }
     M.spellNames = spellNames
     _G.C_Spell = {

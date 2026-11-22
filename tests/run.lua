@@ -105,7 +105,8 @@ end)
 test("cycle helpers", function()
     eq(L.CycleBlessing(false, 1), "MIGHT")
     eq(L.CycleBlessing("MIGHT", -1), false)
-    eq(L.CycleBlessing(false, -1), "SANCTUARY")
+    eq(L.CycleBlessing(false, -1), "KINGS")
+    eq(L.CycleBlessing("KINGS", 1), false)
     eq(L.CycleRole("SHAMAN", nil), "HEALER")
     eq(L.CycleRole("SHAMAN", "CASTER"), nil)
 end)
@@ -115,6 +116,16 @@ test("dominant tab", function()
 end)
 test("format time", function()
     eq(L.FormatTime(3599), "59m") eq(L.FormatTime(3720), "1h02") eq(L.FormatTime(42), "42s")
+end)
+test("only WoW Forever blessings exist", function()
+    for _, k in ipairs({ "SALVATION", "LIGHT", "SANCTUARY" }) do assert(ns.BLESSINGS[k] == nil, k) end
+    eq(#ns.BLESSING_ORDER, 3)
+    for key, p in pairs(ns.DEFAULT_ROLE_PRIORITY) do
+        for i = 1, ns.MAX_PRIORITY do assert(p[i] == false or ns.BLESSINGS[p[i]], key) end
+    end
+    for key, p in pairs(ns.DEFAULT_CLASS_ROLE_PRIORITY) do
+        for i = 1, ns.MAX_PRIORITY do assert(p[i] == false or ns.BLESSINGS[p[i]], key) end
+    end
 end)
 test("every class/role pair has a default priority", function()
     for class, roles in pairs(ns.CLASS_ROLES) do
@@ -137,7 +148,6 @@ end
 M.load(".", files, ns2)
 
 for id in pairs(M.spellNames) do M.known[id] = true end
-M.known[20911] = nil M.known[25899] = nil -- no Sanctuary talent
 
 M.units.player = { guid = "G-P", name = "Camelus", class = "PALADIN", talents = { 31, 5, 15 }, auras = {} }
 -- Camp buffs arrive the way WoW Forever shows them: one "Camp Benefits" aura.
@@ -149,6 +159,11 @@ M.units.party3 = { guid = "G-3", name = "Enhy", class = "SHAMAN", role = "DAMAGE
 M.units.party4 = { guid = "G-4", name = "Stabby", class = "ROGUE", role = "DAMAGER", talents = { 20, 31, 0 },
     auras = { M.campBenefits({ "Fish Bowl: All stats increased by 8%." }), M.aura("Blessing of Kings", { source = "raid9" }) } }
 
+-- Settings saved by v1.0.0, which still offered Salvation / Light / Sanctuary.
+CamelusBetterBlessingsCharDB = {
+    assign = { ["HUNTER:RANGED"] = { "SALVATION", "KINGS", "LIGHT", "SANCTUARY" } },
+    greater = { HUNTER = "SALVATION", WARRIOR = "MIGHT" },
+}
 M.fire("ADDON_LOADED", "CamelusBetterBlessings")
 M.fire("PLAYER_LOGIN")
 M.fire("GROUP_ROSTER_UPDATE")
@@ -164,6 +179,12 @@ end
 local function st(guid) return ns2.units[guid] end
 
 test("integration: roster built", function() eq(#ns2.order, 5) end)
+test("integration: old saved blessings are cleaned up", function()
+    local p = ns2.db.assign["HUNTER:RANGED"]
+    eq(p[1], false) eq(p[2], "KINGS") eq(p[3], false) eq(p[4], nil)
+    eq(ns2.db.greater.HUNTER, nil)
+    eq(ns2.db.greater.WARRIOR, "MIGHT")
+end)
 test("integration: roles", function()
     eq(st("G-P").role, "HEALER")
     eq(st("G-1").role, "TANK")
@@ -302,7 +323,7 @@ test("integration: config clicks", function()
     ns2.Config:Toggle()
     local row = ns2.Config.rows[1]
     row.slots[1]._scripts.OnClick(row.slots[1], "LeftButton")
-    eq(ns2.db.assign["WARRIOR:TANK"][1], "SALVATION")
+    eq(ns2.db.assign["WARRIOR:TANK"][1], false)
     row.greater._scripts.OnClick(row.greater, "RightButton")
     ns2.Config.checks[1]._checked = false
     ns2.Config.checks[1]._scripts.OnClick(ns2.Config.checks[1])
