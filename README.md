@@ -98,7 +98,8 @@ addon buttons to change in combat. Everything updates again when combat ends.
 **All setup happens in the settings window** (the gear, `/cbb config`, or
 Settings → AddOns):
 
-- **Blessings tab:** one header per class, with its Greater Blessing.
+- **Blessings tab:** two columns of classes, one header per class with its
+  Greater Blessing.
   - Classes with several roles (Warrior, Paladin, Hunter, Priest, Shaman,
     Druid) list each role underneath. Each role row holds up to three
     blessings in priority order.
