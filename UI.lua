@@ -1,6 +1,8 @@
 -- Camelus' Better Blessings - the casting bar
 --
--- A compact, Pally Power style column:
+-- A compact, Pally Power style column. On a class button, left-click casts
+-- the class's Greater Blessing and right-click blesses the next player of
+-- that class who needs it (top to bottom), with that player's own blessing.
 --   (gear) [class icon | greater]  - click: Greater Blessing for the class
 --          ...                       hover: flyout with one button per player
 --   Colours: red = someone is missing their blessing, green = all buffed,
@@ -108,7 +110,7 @@ local function RoleText(role, source, class)
     local c = info.color
     local choices = class and ns.CLASS_ROLES[class]
     local guess = (source == "class" or source == "group+class") and choices and #choices > 1
-    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, info.short, guess and "?" or "")
+    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, Logic.RoleShort(class, role), guess and "?" or "")
 end
 ns.RoleText = RoleText
 
@@ -158,16 +160,23 @@ local function Paint(b, key)
     b.bg:SetColorTexture(c[1], c[2], c[3], 0.85)
 end
 
-local function ClearSecure(b)
-    b:SetAttribute("type1", nil)
-    b:SetAttribute("spell1", nil)
-    b:SetAttribute("unit", nil)
+-- n = mouse button (1 = left, 2 = right). Left-click uses the plain "unit"
+-- attribute; right-click uses "unit2" (the secure template prefers the
+-- button-specific one).
+local function UnitAttr(n) return n == 2 and "unit2" or "unit" end
+
+local function ClearSecure(b, n)
+    n = n or 1
+    b:SetAttribute("type" .. n, nil)
+    b:SetAttribute("spell" .. n, nil)
+    b:SetAttribute(UnitAttr(n), nil)
 end
 
-local function SetSpell(b, spell, unit)
-    b:SetAttribute("type1", "spell")
-    b:SetAttribute("spell1", spell)
-    b:SetAttribute("unit", unit)
+local function SetSpell(b, spell, unit, n)
+    n = n or 1
+    b:SetAttribute("type" .. n, "spell")
+    b:SetAttribute("spell" .. n, spell)
+    b:SetAttribute(UnitAttr(n), unit)
 end
 
 ---------------------------------------------------------------------------
@@ -313,6 +322,9 @@ local function CreateClassButton(i)
     fly.buttons = {}
     b.flyout = fly
 
+    -- Right-click blesses the next player of this class who needs it; pick
+    -- them right before the click so consecutive clicks walk down the list.
+    b:SetScript("PreClick", function(self) UI:PrepareClassSingle(self) end)
     b:HookScript("OnEnter", function(self)
         UI:OpenFlyout(self)
         UI:ClassTooltip(self)
@@ -434,7 +446,9 @@ function UI:Layout()
     for i = ci + 1, #self.classButtons do
         local cb = self.classButtons[i]
         cb.class, cb.numPlayers = nil, 0
-        ClearSecure(cb)
+        ClearSecure(cb, 1)
+        ClearSecure(cb, 2)
+        cb.nextSingle = nil
         for _, pb in ipairs(cb.flyout.buttons) do pb.guid = nil ClearSecure(pb) pb:Hide() end
         cb.flyout:Hide()
         cb:Hide()
@@ -579,11 +593,36 @@ function UI:RefreshClassButton(cb, canSet)
     end
     if canSet then
         if info.blessing and info.known and not info.blocked and info.target then
-            SetSpell(cb, ns.BlessingSpell(info.blessing, true), info.target.unit)
+            SetSpell(cb, ns.BlessingSpell(info.blessing, true), info.target.unit, 1)
         else
-            ClearSecure(cb)
+            ClearSecure(cb, 1)
+        end
+        self:PrepareClassSingle(cb)
+    end
+end
+
+-- First player of the class, top to bottom (same order as the flyout), who
+-- needs a blessing and can get one now. Each player gets their own choice.
+function UI:NextInClass(class)
+    for _, st in ipairs(ns.ClassMembers(class)) do
+        local c = st.choice
+        if c and c.blessing and Logic.NEEDS_CAST[c.status] and not st.isPending
+            and st.connected and not st.dead and st.inRange then
+            return st
         end
     end
+    return nil
+end
+
+function UI:PrepareClassSingle(cb)
+    if InCombatLockdown() or not cb.class then return end
+    local st = self:NextInClass(cb.class)
+    if st then
+        SetSpell(cb, ns.BlessingSpell(st.choice.blessing, false), st.unit, 2)
+    else
+        ClearSecure(cb, 2)
+    end
+    cb.nextSingle = st
 end
 
 function UI:RefreshSmartVisual()
@@ -657,8 +696,7 @@ function UI:PlayerTooltip(b)
     local tt = GameTooltip
     tt:SetOwner(b, "ANCHOR_RIGHT")
     tt:AddLine(st.name, ClassColor(st.class))
-    local role = ns.ROLE_INFO[st.role]
-    tt:AddDoubleLine("Role", string.format("%s (%s)", role and role.label or "?", ROLE_SOURCE_TEXT[st.roleSource] or "?"), 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Role", string.format("%s (%s)", Logic.RoleLabel(st.class, st.role), ROLE_SOURCE_TEXT[st.roleSource] or "?"), 0.8, 0.8, 0.8, 1, 1, 1)
     if st.talentDetail then tt:AddDoubleLine("Talents", st.talentDetail, 0.8, 0.8, 0.8, 1, 1, 1) end
 
     local now = GetTime()
@@ -710,7 +748,13 @@ function UI:ClassTooltip(cb)
     local tt = GameTooltip
     tt:SetOwner(cb, "ANCHOR_LEFT")
     tt:AddLine(ClassLabel(cb.class), ClassColor(cb.class))
-    tt:AddDoubleLine("Click", info.blessing and ns.BlessingSpell(info.blessing, true) or "no Greater Blessing set", 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:AddDoubleLine("Left-click", info.blessing and ns.BlessingSpell(info.blessing, true) or "no Greater Blessing set", 0.8, 0.8, 0.8, 1, 1, 1)
+    local nxt = cb.nextSingle
+    if nxt and nxt.choice and nxt.choice.blessing then
+        tt:AddDoubleLine("Right-click", string.format("%s on %s", BlessingShort(nxt.choice.blessing), ShortName(nxt.name)), 0.8, 0.8, 0.8, 1, 1, 1)
+    else
+        tt:AddDoubleLine("Right-click", "nobody in range needs one", 0.8, 0.8, 0.8, 0.6, 1, 0.6)
+    end
     if info.blessing then
         tt:AddDoubleLine("Have it", string.format("%d / %d", info.have, #info.members), 0.8, 0.8, 0.8, 1, 1, 1)
     end

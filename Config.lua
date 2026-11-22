@@ -15,7 +15,6 @@ local CONTENT_TOP = -64
 local ROW_H = 20
 local SLOT = 20
 local LABEL_W = 170
-local PLAYER_ROW_H = 36
 local EMPTY = "Interface\\Buttons\\UI-EmptySlot-Disabled"
 
 local OPTIONS = {
@@ -181,7 +180,7 @@ function Config:BuildBlessingsTab(tab)
             for _, role in ipairs(roles) do
                 local row = { class = class, role = role, slots = {} }
                 local rc = ns.ROLE_INFO[role].color
-                local label = NewLabel(tab, "GameFontHighlightSmall", ns.ROLE_INFO[role].label)
+                local label = NewLabel(tab, "GameFontHighlightSmall", Logic.RoleLabel(class, role))
                 label:SetPoint("TOPLEFT", tab, "TOPLEFT", 22, y - 4)
                 label:SetTextColor(rc[1], rc[2], rc[3])
                 row.label = label
@@ -204,92 +203,121 @@ function Config:BuildBlessingsTab(tab)
 end
 
 ---------------------------------------------------------------------------
--- Players tab
+-- Players tab: laid out like the raid window - Group 1-8 in a 2 x 4 grid,
+-- up to five players each, so a 40-player raid fits without scrolling.
+-- Details (what Auto picked and why, blessing order) are in the tooltip.
 ---------------------------------------------------------------------------
+local GROUP_GAP = 6
+local GROUP_W = (WIDTH - PAD * 2 - GROUP_GAP) / 2
+local SLOT_H = 19
+local GROUP_HEADER = 16
+local GROUP_H = GROUP_HEADER + 5 * SLOT_H + 6
+local ROLE_BTN_W = 84
+
 local function RoleButtonText(st)
     local manual = ns.db.overrides[st.name]
     local role = manual or st.role
     local info = ns.ROLE_INFO[role]
-    local text = info and (Hex(info.color[1], info.color[2], info.color[3]) .. info.label .. "|r") or "?"
-    if not manual then text = "Auto: " .. text end
+    if not info then return "?" end
+    local text = Hex(info.color[1], info.color[2], info.color[3]) .. Logic.RoleShort(st.class, role) .. "|r"
+    if not manual then text = "|cff999999Auto|r " .. text end
     return text
 end
 
-local function MakePlayerRow(parent, i)
-    local row = CreateFrame("Frame", nil, parent)
-    row:SetSize(WIDTH - PAD * 2 - 8, PLAYER_ROW_H)
-    row:SetPoint("TOPLEFT", parent, "TOPLEFT", 0, -(i - 1) * PLAYER_ROW_H)
-    if i % 2 == 0 then
-        local bg = row:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints()
-        bg:SetColorTexture(1, 1, 1, 0.04)
+local function PlayerDetailTooltip(owner, st)
+    if not st then return end
+    local tt = GameTooltip
+    tt:SetOwner(owner, "ANCHOR_RIGHT")
+    tt:AddLine(st.name, ns.ClassColor(st.class))
+    local manual = ns.db.overrides[st.name]
+    local roles = ns.CLASS_ROLES[st.class] or {}
+    if manual then
+        tt:AddDoubleLine("Role", Logic.RoleLabel(st.class, manual) .. " (set by you)", 0.8, 0.8, 0.8, 1, 1, 1)
     end
+    if #roles <= 1 then
+        tt:AddLine("Only one role for this class.", 0.7, 0.7, 0.7)
+    else
+        local autoRole, src = Logic.ResolveRole(st.class, nil, st.groupRole, st.talentRole)
+        tt:AddDoubleLine("Auto picks", string.format("%s (%s)", Logic.RoleLabel(st.class, autoRole), ns.ROLE_SOURCE_TEXT[src] or "?"),
+            0.8, 0.8, 0.8, 1, 1, 1)
+        if st.talentDetail then tt:AddDoubleLine("Talents", st.talentDetail, 0.8, 0.8, 0.8, 1, 1, 1) end
+    end
+    local order = {}
+    for j = 1, ns.MAX_PRIORITY do
+        local key = st.priority and st.priority[j]
+        if key and ns.BLESSINGS[key] then order[#order + 1] = ns.BlessingShort(key) end
+    end
+    tt:AddDoubleLine("Blessings", #order > 0 and table.concat(order, " > ") or "none", 0.8, 0.8, 0.8, 1, 0.82, 0)
+    if #roles > 1 then tt:AddLine("Role button: left-click next, right-click previous", 0.5, 0.8, 1) end
+    tt:Show()
+end
+
+local function MakePlayerRow(box, slot)
+    local row = CreateFrame("Frame", nil, box)
+    row:SetSize(GROUP_W - 8, SLOT_H)
+    row:SetPoint("TOPLEFT", box, "TOPLEFT", 4, -GROUP_HEADER - (slot - 1) * SLOT_H)
+    row:EnableMouse(true)
     row.classIcon = row:CreateTexture(nil, "ARTWORK")
-    row.classIcon:SetSize(18, 18)
-    row.classIcon:SetPoint("TOPLEFT", 2, -4)
-    row.name = NewLabel(row, "GameFontHighlight")
-    row.name:SetPoint("LEFT", row.classIcon, "RIGHT", 6, 0)
-    row.name:SetWidth(120)
-    if row.name.SetWordWrap then row.name:SetWordWrap(false) end
+    row.classIcon:SetSize(14, 14)
+    row.classIcon:SetPoint("LEFT", row, "LEFT", 2, 0)
 
     local rb = CreateFrame("Button", nil, row, "UIPanelButtonTemplate")
-    rb:SetSize(150, 20)
-    rb:SetPoint("TOPLEFT", row, "TOPLEFT", 150, -3)
+    rb:SetSize(ROLE_BTN_W, SLOT_H - 1)
+    rb:SetPoint("RIGHT", row, "RIGHT", 0, 0)
     rb:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    if rb.SetNormalFontObject then
+        rb:SetNormalFontObject("GameFontHighlightSmall")
+        rb:SetHighlightFontObject("GameFontHighlightSmall")
+        if rb.SetDisabledFontObject then rb:SetDisabledFontObject("GameFontDisableSmall") end
+    end
     rb:SetScript("OnClick", function(self, mouse)
         local st = row.guid and ns.units[row.guid]
         if not st then return end
         ns.db.overrides[st.name] = Logic.CycleRole(st.class, ns.db.overrides[st.name], mouse == "RightButton" and -1 or 1)
         Changed()
         Config:RefreshPlayers(true)
+        PlayerDetailTooltip(self, ns.units[row.guid])
     end)
-    rb:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Role")
-        GameTooltip:AddLine("Auto = detected from group role and talents.", 0.8, 0.8, 0.8, true)
-        GameTooltip:AddLine("Left-click: next   Right-click: previous", 0.5, 0.8, 1)
-        GameTooltip:Show()
-    end)
+    rb:SetScript("OnEnter", function(self) PlayerDetailTooltip(self, row.guid and ns.units[row.guid]) end)
     rb:SetScript("OnLeave", function() GameTooltip:Hide() end)
     row.roleButton = rb
 
-    row.prio = {}
-    for j = 1, ns.MAX_PRIORITY do
-        local t = row:CreateTexture(nil, "ARTWORK")
-        t:SetSize(18, 18)
-        t:SetPoint("TOPLEFT", rb, "TOPRIGHT", 8 + (j - 1) * 20, 1)
-        t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-        row.prio[j] = t
-    end
-    row.detail = NewLabel(row, "GameFontDisableSmall")
-    row.detail:SetPoint("TOPLEFT", row.classIcon, "BOTTOMLEFT", 24, -1)
-    row.detail:SetWidth(WIDTH - PAD * 2 - 40)
-    if row.detail.SetWordWrap then row.detail:SetWordWrap(false) end
+    row.name = NewLabel(row, "GameFontHighlightSmall")
+    row.name:SetPoint("LEFT", row.classIcon, "RIGHT", 4, 0)
+    row.name:SetPoint("RIGHT", rb, "LEFT", -4, 0)
+    if row.name.SetWordWrap then row.name:SetWordWrap(false) end
+    row:SetScript("OnEnter", function(self) PlayerDetailTooltip(self, row.guid and ns.units[row.guid]) end)
+    row:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    row:Hide()
     return row
 end
 
 function Config:BuildPlayersTab(tab)
     local help = NewLabel(tab, "GameFontHighlightSmall",
-        "Roles decide which row of the Blessings tab a player uses. Leave them on Auto, or click to set one yourself (saved per player).")
+        "Roles decide which row of the Blessings tab a player uses. Auto detects them; click a role to set it yourself (saved per player). Hover a player for details.")
     help:SetPoint("TOPLEFT", 0, 0)
     help:SetWidth(WIDTH - PAD * 2)
 
-    local scroll = CreateFrame("ScrollFrame", nil, tab)
-    scroll:SetPoint("TOPLEFT", tab, "TOPLEFT", 0, -36)
-    scroll:SetPoint("BOTTOMRIGHT", tab, "BOTTOMRIGHT", 0, 34)
-    scroll:EnableMouseWheel(true)
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(WIDTH - PAD * 2, 10)
-    scroll:SetScrollChild(content)
-    scroll:SetScript("OnMouseWheel", function(self, delta)
-        local max = math.max(0, content:GetHeight() - self:GetHeight())
-        local v = math.min(max, math.max(0, self:GetVerticalScroll() - delta * PLAYER_ROW_H))
-        self:SetVerticalScroll(v)
-    end)
-    self.playerScroll, self.playerContent, self.playerRows = scroll, content, {}
-
-    self.emptyText = NewLabel(content, "GameFontDisable", "Join a group to set up roles for its members.")
-    self.emptyText:SetPoint("TOPLEFT", 0, -PLAYER_ROW_H)
+    self.groupBoxes, self.slotsByGroup = {}, {}
+    for g = 1, 8 do
+        local col, line = (g - 1) % 2, math.floor((g - 1) / 2)
+        local box = CreateFrame("Frame", nil, tab, "BackdropTemplate")
+        box:SetSize(GROUP_W, GROUP_H)
+        box:SetPoint("TOPLEFT", tab, "TOPLEFT", col * (GROUP_W + GROUP_GAP), -32 - line * (GROUP_H + GROUP_GAP))
+        if box.SetBackdrop then
+            box:SetBackdrop({
+                bgFile = "Interface\\Buttons\\WHITE8X8",
+                edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+                edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 },
+            })
+            box:SetBackdropColor(0.12, 0.12, 0.14, 1)
+            box:SetBackdropBorderColor(0.45, 0.45, 0.45, 1)
+        end
+        local title = NewLabel(box, "GameFontNormalSmall", "Group " .. g)
+        title:SetPoint("TOPLEFT", box, "TOPLEFT", 6, -4)
+        self.groupBoxes[g] = box
+        self.slotsByGroup[g] = {}
+    end
 
     local reset = SmallButton(tab, "Set everyone to Auto", 160)
     reset:SetPoint("BOTTOMLEFT", tab, "BOTTOMLEFT", 0, 4)
@@ -308,44 +336,46 @@ function Config:RefreshPlayers(force)
     if not self.frame or not self.frame:IsShown() or self.activeTab ~= "players" then
         if not force then return end
     end
-    if not self.playerContent then return end
+    if not self.groupBoxes then return end
     if force then ns.EvaluateAll() end
-    local n = 0
+
+    local byGroup = {}
+    for g = 1, 8 do byGroup[g] = {} end
     for _, guid in ipairs(ns.order) do
         local st = ns.units[guid]
         if st then
-            n = n + 1
-            local row = self.playerRows[n] or MakePlayerRow(self.playerContent, n)
-            self.playerRows[n] = row
-            row.guid = guid
-            ns.SetClassIcon(row.classIcon, st.class)
-            row.name:SetText(ns.ShortName(st.name))
-            row.name:SetTextColor(ns.ClassColor(st.class))
-            row.roleButton:SetText(RoleButtonText(st))
-            local roles = ns.CLASS_ROLES[st.class] or {}
-            row.roleButton:SetEnabled(#roles > 1)
-            for j = 1, ns.MAX_PRIORITY do
-                local key = st.priority and st.priority[j]
-                local t = row.prio[j]
-                if key and ns.BLESSINGS[key] then t:SetTexture(ns.BlessingTexture(key, false)) t:Show() else t:Hide() end
-            end
-            local detected
-            if #roles <= 1 then
-                detected = "Only one role for this class."
-            else
-                -- what Auto would pick, and why
-                local autoRole, src = Logic.ResolveRole(st.class, nil, st.groupRole, st.talentRole)
-                local info = ns.ROLE_INFO[autoRole]
-                detected = string.format("Auto picks %s (%s%s)", info and info.label or "?", ns.ROLE_SOURCE_TEXT[src] or "?",
-                    (src == "talents" and st.talentDetail) and (": " .. st.talentDetail) or "")
-            end
-            row.detail:SetText(detected)
-            row:Show()
+            local g = st.subgroup or 1
+            if g < 1 or g > 8 then g = 1 end
+            local list = byGroup[g]
+            if #list < 5 then list[#list + 1] = st end
         end
     end
-    for i = n + 1, #self.playerRows do self.playerRows[i]:Hide() self.playerRows[i].guid = nil end
-    self.playerContent:SetHeight(math.max(10, n * PLAYER_ROW_H))
-    self.emptyText:SetShown(n <= 1)
+
+    local inRaid = IsInRaid()
+    self.playerRows = {}
+    for g = 1, 8 do
+        local box = self.groupBoxes[g]
+        box:SetShown(inRaid or g == 1)
+        for slot = 1, 5 do
+            local st = byGroup[g][slot]
+            local row = self.slotsByGroup[g][slot]
+            if st then
+                row = row or MakePlayerRow(box, slot)
+                self.slotsByGroup[g][slot] = row
+                row.guid = st.guid
+                ns.SetClassIcon(row.classIcon, st.class)
+                row.name:SetText(ns.ShortName(st.name))
+                row.name:SetTextColor(ns.ClassColor(st.class))
+                row.roleButton:SetText(RoleButtonText(st))
+                row.roleButton:SetEnabled(#(ns.CLASS_ROLES[st.class] or {}) > 1)
+                row:Show()
+                self.playerRows[#self.playerRows + 1] = row
+            elseif row then
+                row.guid = nil
+                row:Hide()
+            end
+        end
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -428,12 +458,14 @@ function Config:Create()
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
     if f.SetBackdrop then
         f:SetBackdrop({
-            bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            bgFile = "Interface\\Buttons\\WHITE8X8",
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
             tile = true, tileSize = 32, edgeSize = 24,
             insets = { left = 6, right = 6, top = 6, bottom = 6 },
         })
     end
+    -- Nearly opaque, so text stays readable over any background.
+    if f.SetBackdropColor then f:SetBackdropColor(0.06, 0.06, 0.08, 0.97) end
     f:Hide()
     tinsert(UISpecialFrames, "CBB_ConfigFrame")
     self.frame = f

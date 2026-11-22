@@ -40,6 +40,21 @@ function Logic.ResolveRole(class, manual, groupRole, talentRole)
     return ns.CLASS_DEFAULT_ROLE[class] or "MELEE", "class"
 end
 
+-- Role name for a class ("Melee weaving" for a hunter's MELEE role).
+function Logic.RoleLabel(class, role)
+    local o = ns.ROLE_LABEL_OVERRIDE and ns.ROLE_LABEL_OVERRIDE[(class or "?") .. ":" .. (role or "?")]
+    if o then return o.label end
+    local info = ns.ROLE_INFO[role]
+    return info and info.label or "?"
+end
+
+function Logic.RoleShort(class, role)
+    local o = ns.ROLE_LABEL_OVERRIDE and ns.ROLE_LABEL_OVERRIDE[(class or "?") .. ":" .. (role or "?")]
+    if o then return o.short end
+    local info = ns.ROLE_INFO[role]
+    return info and info.short or "?"
+end
+
 function Logic.AssignKey(class, role)
     return (class or "?") .. ":" .. (role or "?")
 end

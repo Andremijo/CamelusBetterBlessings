@@ -98,13 +98,18 @@ ns.CLASS_ORDER = { "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST", "SHAMAN", 
 ns.CLASS_ROLES = {
     WARRIOR = { "TANK", "MELEE" },
     PALADIN = { "TANK", "HEALER", "MELEE" },
-    HUNTER  = { "RANGED" },
+    HUNTER  = { "RANGED", "MELEE" },   -- MELEE = melee weaving
     ROGUE   = { "MELEE" },
     PRIEST  = { "HEALER", "CASTER" },
     SHAMAN  = { "HEALER", "MELEE", "CASTER" },
     MAGE    = { "CASTER" },
     WARLOCK = { "CASTER" },
     DRUID   = { "TANK", "HEALER", "MELEE", "CASTER" },
+}
+
+-- Class-specific names for a role (shown in the settings and on the bar).
+ns.ROLE_LABEL_OVERRIDE = {
+    ["HUNTER:MELEE"] = { label = "Melee weaving", short = "WEAV" },
 }
 
 -- Used when nothing else is known about a player.
@@ -163,6 +168,7 @@ ns.DEFAULT_CLASS_ROLE_PRIORITY = {
     ["PALADIN:MELEE"] = { "MIGHT", "KINGS", "WISDOM" },
     ["SHAMAN:MELEE"]  = { "MIGHT", "KINGS", "WISDOM" },
     ["DRUID:MELEE"]   = { "MIGHT", "KINGS", "WISDOM" },
+    ["HUNTER:MELEE"]  = { "KINGS", "MIGHT", "WISDOM" },  -- melee weaving
 }
 
 -- Default Greater Blessing per class (class-wide, so no role split possible).

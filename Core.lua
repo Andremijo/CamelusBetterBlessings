@@ -522,6 +522,12 @@ function ns.RebuildRoster()
             st.unit = unit
             st.name = UnitFullName(unit) or st.name or "?"
             st.class = select(2, UnitClass(unit)) or st.class
+            st.subgroup = 1
+            local idx = tonumber(unit:match("^raid(%d+)$"))
+            if idx and GetRaidRosterInfo then
+                local ok, _, _, sub = pcall(GetRaidRosterInfo, idx)
+                if ok and readable(sub) and type(sub) == "number" then st.subgroup = sub end
+            end
             st.dirty = true
             ns.units[guid] = st
             ns.order[#ns.order + 1] = guid
@@ -885,7 +891,8 @@ local function ParseRole(s)
     if not s then return nil end
     s = s:upper()
     local aliases = { HEAL = "HEALER", HEALS = "HEALER", MDPS = "MELEE", RDPS = "RANGED", CDPS = "CASTER",
-                      DPS = "MELEE", CASTERDPS = "CASTER", MELEEDPS = "MELEE" }
+                      DPS = "MELEE", CASTERDPS = "CASTER", MELEEDPS = "MELEE",
+                      WEAVE = "MELEE", WEAVING = "MELEE", WEAV = "MELEE" }
     s = aliases[s] or s
     for _, r in ipairs(ns.ROLE_ORDER) do if r == s then return r end end
     return nil
@@ -971,10 +978,10 @@ SlashCmdList.CAMELUSBETTERBLESSINGS = function(msg)
             local r = ParseRole(role)
             if not r then Print("unknown role '%s'", role) return end
             if target and not Logic.IsValidRole(target.class, r) then
-                Print("%s cannot be %s.", key, ns.ROLE_INFO[r].label) return
+                Print("%s cannot be %s.", key, Logic.RoleLabel(target.class, r)) return
             end
             ns.db.overrides[key] = r
-            Print("%s is now %s.", key, ns.ROLE_INFO[r].label)
+            Print("%s is now %s.", key, Logic.RoleLabel(target and target.class, r))
         end
         ns.RequestUpdate()
     elseif cmd == "roles" then
