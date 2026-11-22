@@ -575,6 +575,46 @@ test("bar: a class that joins later gets the same width as the others", function
     M.units.party5 = nil
     M.fire("GROUP_ROSTER_UPDATE") M.flush()
 end)
+test("combat: buffs update live (Freedom replaces Kings mid-fight), buttons keep their spell", function()
+    ns2.db.assign["WARRIOR:TANK"] = nil
+    M.units.party1.auras = { M.aura("Blessing of Kings", { mine = true, expires = M.now + 3000 }) }
+    M.fire("UNIT_AURA", "party1") M.flush()
+    eq(st("G-1").choice.status, "OK")
+    eq(rowFor("G-1")._attrs.spell1, "Blessing of Kings")
+
+    -- the fight starts; the client still lets us read group members' buffs
+    M.combat, M.secretInCombat = true, false
+    M.fire("PLAYER_REGEN_DISABLED")
+    M.units.party1.auras = { M.aura("Blessing of Freedom", { mine = true, expires = M.now + 10 }) }
+    M.fire("UNIT_AURA", "party1") M.flush()
+    eq(st("G-1").choice.status, "MISSING")                 -- updated live, like Pally Power
+    eq(st("G-1").stale, false)
+    local war = classRow("WARRIOR")
+    assert(war.bg._color[1] > war.bg._color[2], "warrior button should turn red in combat")
+    eq(rowFor("G-1")._attrs.spell1, "Blessing of Kings")  -- clicking re-applies Kings: still right
+
+    -- a camp buff shows up mid-fight: the pick becomes Might, but the button
+    -- can't change in combat - the tooltip says so
+    local lines = {}
+    local savedAdd = GameTooltip.AddLine
+    GameTooltip.AddLine = function(_, text) lines[#lines + 1] = text end
+    M.units.party1.auras = { M.campBenefits({ "Fish Bowl: +8%" }) }
+    M.fire("UNIT_AURA", "party1") M.flush()
+    eq(st("G-1").choice.blessing, "MIGHT")
+    eq(rowFor("G-1")._attrs.spell1, "Blessing of Kings")
+    ns2.UI:PlayerTooltip(rowFor("G-1"))
+    local found = false
+    for _, l in ipairs(lines) do if tostring(l):find("still casts Blessing of Kings", 1, true) then found = true end end
+    assert(found, "tooltip should explain the frozen button")
+    GameTooltip.AddLine = savedAdd
+
+    -- combat ends: the button catches up
+    M.combat = false
+    M.fire("PLAYER_REGEN_ENABLED") M.flush()
+    eq(rowFor("G-1")._attrs.spell1, "Blessing of Might")
+    M.units.party1.auras = {}
+    M.fire("UNIT_AURA", "party1") M.flush()
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)
