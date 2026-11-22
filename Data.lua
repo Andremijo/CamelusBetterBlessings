@@ -46,8 +46,9 @@ ns.BLESSINGS = {
 -- active camp feature, e.g. "Fish Bowl: ...". The real stat aura (Boosted
 -- Stats) is hidden from addons, so the addon reads the Camp Benefits tooltip.
 --
---   feature   : spell ID of the camp feature; its (localized) name is what the
---               Camp Benefits tooltip line starts with
+--   item      : the camp object's item ID - its icon is what the addon shows
+--   feature   : spell ID the item casts; its (localized) name is what the
+--               Camp Benefits tooltip line starts with (icon fallback too)
 --   match     : lower-case names matched against tooltip lines and aura names
 --   spellIds  : aura spell IDs, in case a feature ever shows as its own aura
 --   conflicts : blessing keys that would REPLACE this camp buff
@@ -63,18 +64,18 @@ ns.CAMP_CONTAINER = {
 ns.CAMP_BUFFS = {
     {
         key = "FISH_BOWL", name = "Fish Bowl", profession = "Fishing", effect = "+8% all stats (Boosted Stats)",
-        feature = 1307245, match = { "fish bowl", "boosted stats" }, spellIds = { 1230098 },
-        conflicts = { "KINGS" }, icon = "Interface\\Icons\\INV_Misc_Fish_02",
+        item = 279967, feature = 1307245, match = { "fish bowl", "boosted stats" }, spellIds = { 1230098 },
+        conflicts = { "KINGS" },
     },
     {
         key = "LODESTONE", name = "Lodestone", profession = "Mining", effect = "Melee attack power",
-        match = { "lodestone" }, spellIds = {}, conflicts = { "MIGHT" },
-        icon = "Interface\\Icons\\INV_Stone_15",
+        item = 279960, feature = 1307254, match = { "lodestone" }, spellIds = {},
+        conflicts = { "MIGHT" },
     },
     {
         key = "MANA_WELL", name = "Mana Well", profession = "Alchemy", effect = "Mana every 5 sec",
-        match = { "mana well" }, spellIds = {}, conflicts = { "WISDOM" },
-        icon = "Interface\\Icons\\INV_Potion_76",
+        item = 279956, feature = 1307259, match = { "mana well" }, spellIds = {},
+        conflicts = { "WISDOM" },
     },
 }
 

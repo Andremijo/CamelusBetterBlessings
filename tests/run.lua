@@ -299,6 +299,17 @@ test("integration: unreadable Camp Benefits blocks every camp blessing", functio
     M.units.player.auras = {}
     M.fire("UNIT_AURA", "player") M.flush()
 end)
+test("integration: camp buffs use the real item icons", function()
+    M.units.party2.auras = { M.campBenefits({ "Mana Well: Restores 29 mana per 5 sec." }) }
+    M.units.party3.auras = { M.campBenefits({ "Lodestone: Melee attack power increased by 90." }) }
+    M.fire("UNIT_AURA", "party2") M.fire("UNIT_AURA", "party3") M.flush()
+    local camps = st("G-4").aura.camps
+    eq(camps[1].key, "FISH_BOWL")
+    eq(camps[1].icon, "item:279967")
+    eq(st("G-2").aura.camps[1].icon, "item:279956")   -- Mana Well
+    eq(st("G-3").aura.camps[1].icon, "item:279960")   -- Lodestone
+    eq(ns2.CAMP_BUFFS[2].localName, "Lodestone")      -- "(Tier 1)" stripped
+end)
 test("integration: /cbb auras prints Camp Benefits lines", function()
     local before = #M.chat
     SlashCmdList.CAMELUSBETTERBLESSINGS("auras party4")

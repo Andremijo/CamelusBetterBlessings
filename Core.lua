@@ -202,11 +202,28 @@ end
 ---------------------------------------------------------------------------
 -- Camp buff definitions (built-in + user added)
 ---------------------------------------------------------------------------
+-- The camp object's real icon: the item's icon (what players see on their
+-- action bar), else the icon of the spell it casts.
+function ns.CampIcon(c)
+    if c.item then
+        local fn = (C_Item and C_Item.GetItemIconByID) or _G.GetItemIcon
+        local ok, icon = SafeCall(fn, c.item)
+        if ok and readable(icon) and icon then return icon end
+    end
+    if c.feature then return SpellTexture(c.feature) end
+    return nil
+end
+
 function ns.CampList()
     local list = {}
     for _, c in ipairs(ns.CAMP_BUFFS) do
         -- The Camp Benefits tooltip names features in the client's language.
-        if c.feature and c.localName == nil then c.localName = SpellName(c.feature) or false end
+        -- Spell names may carry a rank suffix like "(Tier 1)"; drop it.
+        if c.feature and c.localName == nil then
+            local n = SpellName(c.feature)
+            c.localName = n and (n:gsub("%s*%b()", "")) or false
+        end
+        if not c.resolvedIcon then c.resolvedIcon = ns.CampIcon(c) end
         list[#list + 1] = c
     end
     for _, c in ipairs(ns.gdb and ns.gdb.customCamp or {}) do list[#list + 1] = c end
@@ -310,7 +327,7 @@ function ns.ScanUnit(unit)
         seenCamp[id] = true
         local e = {
             key = camp.key, name = camp.name, conflicts = camp.conflicts,
-            icon = camp.icon or (readable(aura.icon) and aura.icon) or nil,
+            icon = camp.resolvedIcon or camp.icon or (readable(aura.icon) and aura.icon) or nil,
             expires = AuraExpires(aura), auraName = aura.name, spellId = spellId,
         }
         for k, v in pairs(extra or {}) do e[k] = v end

@@ -108,6 +108,7 @@ function M.install()
         [19740] = "Blessing of Might", [25782] = "Greater Blessing of Might",
         [19742] = "Blessing of Wisdom", [25894] = "Greater Blessing of Wisdom",
         [20217] = "Blessing of Kings", [25898] = "Greater Blessing of Kings",
+        [1307245] = "Fish Bowl", [1307254] = "Lodestone (Tier 1)", [1307259] = "Mana Well",
     }
     M.spellNames = spellNames
     _G.C_Spell = {
@@ -117,6 +118,7 @@ function M.install()
         GetSpellInfo = function() return nil end,
     }
     _G.IsPlayerSpell = function(id) return M.known[id] or false end
+    _G.C_Item = { GetItemIconByID = function(id) return "item:" .. id end }
 
     _G.C_UnitAuras = {
         GetAuraDataByIndex = function(t, i)
