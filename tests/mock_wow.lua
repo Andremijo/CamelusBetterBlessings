@@ -15,7 +15,9 @@ local function newObject(kind, name)
     return setmetatable(o, { __index = function(t, k)
         local f = M.methods[k]
         if f then return f end
-        return function() end
+        -- WoW widget methods are CamelCase; lowercase keys are addon fields (nil until set)
+        if type(k) == "string" and k:match("^%u") then return function() end end
+        return nil
     end })
 end
 
@@ -46,6 +48,7 @@ M.methods = {
     CreateTexture = function(self) return newObject("Texture") end,
     CreateFontString = function(self) return newObject("FontString") end,
     SetAtlas = function() end,
+    SetColorTexture = function(self, r, g, b, a) self._color = { r, g, b, a } end,
 }
 
 function M.install()
@@ -105,6 +108,7 @@ function M.install()
         [19740] = "Blessing of Might", [25782] = "Greater Blessing of Might",
         [19742] = "Blessing of Wisdom", [25894] = "Greater Blessing of Wisdom",
         [20217] = "Blessing of Kings", [25898] = "Greater Blessing of Kings",
+        [1307245] = "Fish Bowl", [1307254] = "Lodestone (Tier 1)", [1307259] = "Mana Well",
     }
     M.spellNames = spellNames
     _G.C_Spell = {
@@ -114,6 +118,7 @@ function M.install()
         GetSpellInfo = function() return nil end,
     }
     _G.IsPlayerSpell = function(id) return M.known[id] or false end
+    _G.C_Item = { GetItemIconByID = function(id) return "item:" .. id end }
 
     _G.C_UnitAuras = {
         GetAuraDataByIndex = function(t, i)

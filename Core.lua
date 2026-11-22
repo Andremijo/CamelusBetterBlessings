@@ -104,7 +104,6 @@ local function InitDB()
     c.assign = c.assign or {}
     c.greater = c.greater or {}
     c.overrides = c.overrides or {}
-    c.collapsed = c.collapsed or {}
     c.options = c.options or {}
     for k, v in pairs(ns.DEFAULT_OPTIONS) do
         if c.options[k] == nil then c.options[k] = v end
@@ -203,11 +202,28 @@ end
 ---------------------------------------------------------------------------
 -- Camp buff definitions (built-in + user added)
 ---------------------------------------------------------------------------
+-- The camp object's real icon: the item's icon (what players see on their
+-- action bar), else the icon of the spell it casts.
+function ns.CampIcon(c)
+    if c.item then
+        local fn = (C_Item and C_Item.GetItemIconByID) or _G.GetItemIcon
+        local ok, icon = SafeCall(fn, c.item)
+        if ok and readable(icon) and icon then return icon end
+    end
+    if c.feature then return SpellTexture(c.feature) end
+    return nil
+end
+
 function ns.CampList()
     local list = {}
     for _, c in ipairs(ns.CAMP_BUFFS) do
         -- The Camp Benefits tooltip names features in the client's language.
-        if c.feature and c.localName == nil then c.localName = SpellName(c.feature) or false end
+        -- Spell names may carry a rank suffix like "(Tier 1)"; drop it.
+        if c.feature and c.localName == nil then
+            local n = SpellName(c.feature)
+            c.localName = n and (n:gsub("%s*%b()", "")) or false
+        end
+        if not c.resolvedIcon then c.resolvedIcon = ns.CampIcon(c) end
         list[#list + 1] = c
     end
     for _, c in ipairs(ns.gdb and ns.gdb.customCamp or {}) do list[#list + 1] = c end
@@ -311,7 +327,7 @@ function ns.ScanUnit(unit)
         seenCamp[id] = true
         local e = {
             key = camp.key, name = camp.name, conflicts = camp.conflicts,
-            icon = camp.icon or (readable(aura.icon) and aura.icon) or nil,
+            icon = camp.resolvedIcon or camp.icon or (readable(aura.icon) and aura.icon) or nil,
             expires = AuraExpires(aura), auraName = aura.name, spellId = spellId,
         }
         for k, v in pairs(extra or {}) do e[k] = v end
@@ -701,6 +717,7 @@ function ns.Update()
     end
     ns.EvaluateAll()
     if ns.UI then ns.UI:Refresh() end
+    if ns.Config then ns.Config:RefreshPlayers() end
 end
 
 local function MarkAllDirty()
@@ -731,6 +748,7 @@ function handlers.PLAYER_LOGIN()
     ns.RefreshSpells()
     HookTooltip()
     ns.UI:Create()
+    if ns.Config then ns.Config:RegisterSettingsPanel() end
     ns.RequestUpdate(true)
     C_Timer.NewTicker(1, function()
         if ns.InCombat() then return end
@@ -798,7 +816,7 @@ end
 function handlers.PLAYER_REGEN_ENABLED()
     if ns.isPaladin and ns.UI and not ns.UI.main then ns.UI:Create() end
     MarkAllDirty()
-    if ns.UI then ns.UI:SetCombat(false) end
+    if ns.UI then ns.UI:SetCombat(false) ns.UI:CloseFlyouts() end
     ns.RequestUpdate(true)
     ns.UpdateTargetWarning()
 end
@@ -865,7 +883,8 @@ end
 local function Help()
     Print("commands:")
     Print("  /cbb - show / hide the blessing bar")
-    Print("  /cbb config - open the assignment grid")
+    Print("  /cbb config - settings (Blessings / Players / Options)")
+    Print("  /cbb players - set up roles for your group")
     Print("  /cbb lock - lock / unlock the bar")
     Print("  /cbb role <player> <auto|tank|healer|melee|ranged|caster> - set a player's role")
     Print("  /cbb roles - list detected roles")
@@ -888,8 +907,10 @@ SlashCmdList.CAMELUSBETTERBLESSINGS = function(msg)
         if not ns.isPaladin then Print("only paladins get a blessing bar.") return end
         ns.opt.hidden = not ns.opt.hidden
         if ns.UI then ns.UI:UpdateVisibility() end
-    elseif cmd == "config" or cmd == "options" or cmd == "assign" then
+    elseif cmd == "config" or cmd == "options" or cmd == "assign" or cmd == "settings" then
         if ns.Config then ns.Config:Toggle() end
+    elseif cmd == "players" then
+        if ns.Config then ns.Config:Toggle("players") end
     elseif cmd == "lock" then
         ns.opt.locked = not ns.opt.locked
         Print("bar %s.", ns.opt.locked and "locked" or "unlocked")
