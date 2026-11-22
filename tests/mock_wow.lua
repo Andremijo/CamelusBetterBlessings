@@ -38,7 +38,8 @@ M.methods = {
     GetWidth = function(self) return self._width end,
     GetHeight = function(self) return self._height end,
     GetPoint = function() return "CENTER", nil, "CENTER", 10, 20 end,
-    GetFrameLevel = function() return 1 end,
+    GetFrameLevel = function(self) return self._level or 1 end,
+    SetFrameLevel = function(self, l) self._level = l end,
     GetStringHeight = function() return 12 end,
     SetText = function(self, t) self._text = t end,
     SetPoint = function(self, point, rel, relPoint, x, y)
