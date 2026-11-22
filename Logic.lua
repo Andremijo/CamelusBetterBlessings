@@ -272,6 +272,14 @@ function Logic.DominantTab(tabs)
     return best, table.concat(parts, "/")
 end
 
+-- Pally Power style countdown: "56:04", or "1h05" from an hour up.
+function Logic.FormatClock(sec)
+    if not sec then return "" end
+    if sec < 0 then sec = 0 end
+    if sec >= 3600 then return string.format("%dh%02d", math.floor(sec / 3600), math.floor(sec % 3600 / 60)) end
+    return string.format("%d:%02d", math.floor(sec / 60), math.floor(sec % 60))
+end
+
 function Logic.FormatTime(sec)
     if not sec then return "" end
     if sec >= 3600 then return string.format("%dh%02d", math.floor(sec / 3600), math.floor(sec % 3600 / 60)) end
