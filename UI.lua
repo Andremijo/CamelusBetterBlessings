@@ -299,7 +299,7 @@ local function CreatePlayerButton(flyout, i)
 end
 
 local function CreateClassButton(i)
-    local b = MakeButton("CBB_ClassButton" .. i, UI.main, BTN_W)
+    local b = MakeButton("CBB_ClassButton" .. i, UI.main, UI.buttonWidth or BTN_W)
     b.icon2 = b:CreateTexture(nil, "ARTWORK")
     b.icon2:SetSize(ICON, ICON)
     b.icon2:SetPoint("LEFT", b.icon1, "RIGHT", 3, 0)
@@ -741,10 +741,13 @@ function UI:FitWidth()
     local most = 0
     for i = 1, self.numClasses or 0 do most = math.max(most, self.classButtons[i].numCampMarks or 0) end
     local w = self:ButtonWidth(most)
-    if w == self.buttonWidth then return end
     self.buttonWidth = w
-    for _, cb in ipairs(self.classButtons) do cb:SetWidth(w) end
-    if self.smart then self.smart:SetWidth(w) end
+    -- Every button, every time: buttons created later (a new class joins
+    -- the group) must not keep their creation width.
+    for _, cb in ipairs(self.classButtons) do
+        if cb:GetWidth() ~= w then cb:SetWidth(w) end
+    end
+    if self.smart and self.smart:GetWidth() ~= w then self.smart:SetWidth(w) end
     self.main:SetWidth(HANDLE + 2 + w)
 end
 
