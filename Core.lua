@@ -135,6 +135,14 @@ function ns.GetGreater(class)
     return v or nil
 end
 
+-- What the bar casts as Greater Blessing: Pally Power's assignment for me if
+-- I follow it, else my own setting.
+function ns.EffectiveGreater(class)
+    local pp = ns.PP and ns.PP.MyGreater(class)
+    if pp then return pp, true end
+    return ns.GetGreater(class), false
+end
+
 ---------------------------------------------------------------------------
 -- Spells: localized names, icons, known state
 ---------------------------------------------------------------------------
@@ -597,6 +605,17 @@ function ns.EvaluateUnit(st)
     st.conflicts = Logic.ConflictMap(aura.camps)
     st.mine = mine
     st.priority = Logic.GetPriority(ns.db.assign, st.class, st.role)
+    st.ppAssigned = nil
+    if ns.PP then
+        -- my Pally Power assignment for this player goes first
+        st.priority, st.ppAssigned = ns.PP.ApplyPriority(st, st.priority)
+        -- blessings other paladins are assigned to give this player count as taken
+        if ns.opt.respectOthers then
+            for b, who in pairs(ns.PP.PlannedByOthers(st)) do
+                if not taken[b] then taken[b] = who end
+            end
+        end
+    end
     st.choice = Logic.ChooseBlessing(st.priority, {
         known = ns.known,
         conflicts = st.conflicts,

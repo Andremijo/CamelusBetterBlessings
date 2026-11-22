@@ -615,5 +615,75 @@ test("integration: config clicks", function()
     M.flush()
 end)
 
+test("pally power: reads other paladins' assignments and never sends any", function()
+    local sent = {}
+    C_ChatInfo = {
+        SendAddonMessage = function(prefix, msg, channel) sent[#sent + 1] = { prefix, msg, channel } end,
+        RegisterAddonMessagePrefix = function() end,
+    }
+    UnitInParty = function(n) return n == "Holybob" end
+    UnitIsGroupLeader = function(n) return n == "Holybob" end
+    local PP = ns2.PP
+    local function recv(msg, from)
+        PP.frame._scripts.OnEvent(PP.frame, "CHAT_MSG_ADDON", "PLPWR", msg, "PARTY", from or "Holybob")
+        M.flush()
+    end
+    ns2.db.assign["WARRIOR:TANK"] = nil   -- an earlier test edited this row; use the defaults (Kings > Might)
+    M.units.party1.auras, M.units.party2.auras = {}, {}
+    M.fire("UNIT_AURA", "party1") M.fire("UNIT_AURA", "party2") M.flush()
+
+    -- asking: the same REQ Pally Power sends, nothing else
+    assert(PP.Request(true), "request should go out in a group")
+    eq(sent[1][1], "PLPWR") eq(sent[1][2], "REQ") eq(sent[1][3], "PARTY")
+
+    -- Holybob's own row: Kings on warriors (class 1), Wisdom on shamans (class 9)
+    recv("SELF 3n3n3n@3nnnnnnn1")
+    eq(PP.BlessingFor("Holybob", "WARRIOR"), "KINGS")
+    eq(PP.BlessingFor("Holybob", "SHAMAN"), "WISDOM")
+    eq(PP.BlessingFor("Holybob", "ROGUE"), nil)
+    -- Tankwar would get Kings from me, but Holybob gives it: I pick the next one
+    eq(st("G-1").choice.blessing, "MIGHT")
+    eq(st("G-1").choice.skipped[1].reason, "taken")
+
+    -- the leader assigns ME Wisdom on warriors
+    recv("ASSIGN Camelus 1 1")
+    eq(st("G-1").priority[1], "WISDOM")
+    eq(st("G-1").choice.blessing, "WISDOM")
+    eq(ns2.EffectiveGreater("WARRIOR"), "WISDOM")
+    -- a single-player assignment beats the class one
+    recv("NASSIGN Camelus 9 Elly 3")
+    eq(st("G-2").priority[1], "KINGS")
+
+    -- the Pally Power tab lists both paladins, me first
+    ns2.Config:Toggle("pallypower")
+    eq(#ns2.Config.ppList, 2)
+    eq(ns2.Config.ppList[1].isMe, true)
+    eq(ns2.Config.ppList[2].name, "Holybob")
+
+    -- not following: back to my own lists and my own Greater Blessing
+    ns2.opt.followPP = false
+    ns2.RequestUpdate() M.flush()
+    eq(st("G-1").priority[1], "KINGS")
+    eq(ns2.EffectiveGreater("WARRIOR"), ns2.GetGreater("WARRIOR"))
+    ns2.opt.followPP = true
+
+    -- someone outside the group is ignored; a non-leader can't change my row
+    recv("SELF 3n@333333333", "Stranger")
+    eq(PP.Data().rows["Stranger"], nil)
+    UnitInParty = function(n) return n == "Holybob" or n == "Otherpal" end
+    recv("ASSIGN Camelus 1 3", "Otherpal")
+    eq(PP.BlessingFor("Camelus", "WARRIOR"), "WISDOM")
+
+    -- the leader clears everything
+    recv("CLEAR")
+    eq(PP.BlessingFor("Holybob", "WARRIOR"), nil)
+    eq(PP.BlessingFor("Camelus", "WARRIOR"), nil)
+
+    -- this addon only ever sent requests
+    for _, m in ipairs(sent) do eq(m[2], "REQ") end
+    C_ChatInfo, UnitInParty, UnitIsGroupLeader = nil, nil, nil
+    ns2.RequestUpdate() M.flush()
+end)
+
 print(string.format("%d passed, %d failed", passed, failed))
 if failed > 0 then os.exit(1) end

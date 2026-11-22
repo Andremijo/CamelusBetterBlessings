@@ -115,6 +115,24 @@ Settings → AddOns):
     choice is saved per player.
   - Hover a player to see what Auto picked and why (group role or talents),
     and the blessing order they will get.
+- **Pally Power tab:** the blessing assignments the other paladins in your
+  group made in Pally Power, or a compatible addon such as Lightbound.
+  - Shown as a grid of paladins × classes, with your row marked.
+  - A `+` means there are single-player assignments; hover the cell to see
+    them.
+  - This addon only **reads** them. It asks the group for their assignments,
+    the same request Pally Power sends, but never sends its own, so other
+    paladins don't see you in Pally Power.
+  - **Follow my Pally Power assignments** (in Options, on by default): when
+    someone assigns you, e.g., Might on Warriors, Might becomes the first
+    choice for every warrior, and the Warrior class button's Greater Blessing
+    follows it too. A single-player assignment beats the class one. Camp buff
+    protection still applies: if the assigned blessing would replace a camp
+    buff, your own lists are used.
+  - With **Respect other paladins** on, a blessing another paladin is assigned
+    to give a player counts as taken, so you pick your next one for them.
+  - WoW Forever can hold back addon messages during boss fights; the
+    assignments update once that ends.
 - **Options tab:** camp buff protection, Greater Blessing blocking, respecting
   other paladins, target warning, tooltips, smart button, bar lock and scale,
   and the refresh warning time.

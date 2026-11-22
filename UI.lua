@@ -532,9 +532,9 @@ end
 
 -- Facts about a Greater Blessing for one class.
 function UI:GreaterInfo(class)
-    local g = ns.GetGreater(class)
+    local g, fromPP = ns.EffectiveGreater(class)
     local members = ns.ClassMembers(class)
-    local info = { blessing = g, members = members, have = 0, target = nil, replaces = {}, notIdeal = {},
+    local info = { blessing = g, fromPP = fromPP, members = members, have = 0, target = nil, replaces = {}, notIdeal = {},
                    need = 0, needInRange = 0, refresh = 0, camps = {} }
     local seenCamp = {}
     local list = {}
@@ -737,6 +737,7 @@ function UI:PlayerTooltip(b)
     for _, s in ipairs(c.skipped or {}) do
         tt:AddLine(string.format("  skipped %s: %s", BlessingShort(s.blessing), string.format(SKIP_TEXT[s.reason] or s.reason, s.detail or "?")), 0.75, 0.75, 0.75)
     end
+    if st.ppAssigned then tt:AddLine("Pally Power assigns you " .. BlessingShort(st.ppAssigned) .. " here.", 0.6, 0.8, 1) end
     if st.stale then tt:AddLine("* buff info is from before combat", 0.6, 0.6, 0.6) end
     tt:AddLine("Roles and priorities: /cbb config", 0.5, 0.8, 1)
     tt:Show()
@@ -749,6 +750,7 @@ function UI:ClassTooltip(cb)
     tt:SetOwner(cb, "ANCHOR_LEFT")
     tt:AddLine(ClassLabel(cb.class), ClassColor(cb.class))
     tt:AddDoubleLine("Left-click", info.blessing and ns.BlessingSpell(info.blessing, true) or "no Greater Blessing set", 0.8, 0.8, 0.8, 1, 1, 1)
+    if info.fromPP then tt:AddLine("(your Pally Power assignment)", 0.6, 0.8, 1) end
     local nxt = cb.nextSingle
     if nxt and nxt.choice and nxt.choice.blessing then
         tt:AddDoubleLine("Right-click", string.format("%s on %s", BlessingShort(nxt.choice.blessing), ShortName(nxt.name)), 0.8, 0.8, 0.8, 1, 1, 1)

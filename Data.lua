@@ -186,6 +186,7 @@ ns.DEFAULT_OPTIONS = {
     locked         = false,
     hidden         = false,
     showSmart      = false, -- show the smart button on the bar (its key binding always works)
+    followPP       = true,  -- my Pally Power assignments (from another paladin) come first
     warnTarget     = true,  -- warn about camp buffs on your current target
     tooltip        = true,  -- add camp buff info to unit tooltips
     scale          = 1,
