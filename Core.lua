@@ -187,7 +187,11 @@ end
 ---------------------------------------------------------------------------
 function ns.CampList()
     local list = {}
-    for _, c in ipairs(ns.CAMP_BUFFS) do list[#list + 1] = c end
+    for _, c in ipairs(ns.CAMP_BUFFS) do
+        -- The Camp Benefits tooltip names features in the client's language.
+        if c.feature and c.localName == nil then c.localName = SpellName(c.feature) or false end
+        list[#list + 1] = c
+    end
     for _, c in ipairs(ns.gdb and ns.gdb.customCamp or {}) do list[#list + 1] = c end
     return list
 end
@@ -195,7 +199,7 @@ end
 ---------------------------------------------------------------------------
 -- Aura scanning
 ---------------------------------------------------------------------------
--- Calls fn(aura) for every helpful aura. Returns false if the data is
+-- Calls fn(aura, index) for every helpful aura. Returns false if the data is
 -- restricted (secret) right now, true otherwise.
 local function ForEachHelpful(unit, fn)
     if C_UnitAuras and C_UnitAuras.GetAuraDataByIndex then
@@ -204,7 +208,7 @@ local function ForEachHelpful(unit, fn)
             if not ok then return false end
             if not aura then break end
             if not readable(aura) or not readable(aura.name) then return false end
-            fn(aura)
+            fn(aura, i)
         end
         return true
     elseif UnitBuff then
@@ -214,7 +218,7 @@ local function ForEachHelpful(unit, fn)
             if not name then break end
             if not readable(name) then return false end
             fn({ name = name, icon = icon, duration = duration, expirationTime = expirationTime,
-                 sourceUnit = source, spellId = spellId })
+                 sourceUnit = source, spellId = spellId }, i)
         end
         return true
     end
@@ -248,18 +252,73 @@ local function AuraExpires(aura)
 end
 
 -- Returns { ok, blessings = { KEY = { mine, greater, expires, caster } }, camps = { ... } }
+-- Text lines of a buff's tooltip, or nil if they cannot be read.
+local function AuraTooltipLines(unit, aura, index)
+    if not C_TooltipInfo then return nil end
+    local data
+    local id = aura.auraInstanceID
+    if C_TooltipInfo.GetUnitBuffByAuraInstanceID and readable(id) and id then
+        local ok, d = pcall(C_TooltipInfo.GetUnitBuffByAuraInstanceID, unit, id, "HELPFUL")
+        if ok and readable(d) and type(d) == "table" then data = d end
+    end
+    if not data and C_TooltipInfo.GetUnitAura and index then
+        local ok, d = pcall(C_TooltipInfo.GetUnitAura, unit, index, "HELPFUL")
+        if ok and readable(d) and type(d) == "table" then data = d end
+    end
+    if not data or not readable(data.lines) or type(data.lines) ~= "table" then return nil end
+    local lines = {}
+    for _, line in ipairs(data.lines) do
+        if readable(line) and type(line) == "table" then
+            for _, key in ipairs({ "leftText", "rightText" }) do
+                local t = line[key]
+                if readable(t) and type(t) == "string" and t ~= "" then lines[#lines + 1] = t end
+            end
+        end
+    end
+    return lines
+end
+ns.AuraTooltipLines = AuraTooltipLines
+
+local UNREADABLE_CAMP = "Camp Benefits (unreadable)"
+
+-- Returns { ok, blessings = { KEY = { mine, greater, expires, caster } }, camps = { ... } }
+-- camps entries: { key, name, conflicts, icon, expires, unreadable }
 function ns.ScanUnit(unit)
     local res = { blessings = {}, camps = {} }
     local campList = ns.CampList()
-    res.ok = ForEachHelpful(unit, function(aura)
+    local seenCamp = {}
+    local function AddCamp(camp, aura, spellId, extra)
+        local id = camp.name or camp.key
+        if seenCamp[id] then return end
+        seenCamp[id] = true
+        local e = {
+            key = camp.key, name = camp.name, conflicts = camp.conflicts,
+            icon = camp.icon or (readable(aura.icon) and aura.icon) or nil,
+            expires = AuraExpires(aura), auraName = aura.name, spellId = spellId,
+        }
+        for k, v in pairs(extra or {}) do e[k] = v end
+        res.camps[#res.camps + 1] = e
+    end
+    res.ok = ForEachHelpful(unit, function(aura, index)
         local spellId = readable(aura.spellId) and aura.spellId or nil
+        -- WoW Forever bundles every camp feature into one "Camp Benefits"
+        -- aura; its tooltip says which features are active.
+        if Logic.IsCampContainer(aura.name, spellId, ns.CAMP_CONTAINER) then
+            res.hasCampBenefits = true
+            local lines = AuraTooltipLines(unit, aura, index)
+            if lines then
+                for _, camp in ipairs(Logic.MatchCampLines(lines, campList)) do AddCamp(camp, aura, spellId) end
+            else
+                -- Can't tell which features are on: assume every camp buff, so
+                -- nothing gets overwritten by accident.
+                AddCamp({ key = "CAMP_UNKNOWN", name = UNREADABLE_CAMP, conflicts = Logic.AllCampConflicts(campList),
+                          icon = readable(aura.icon) and aura.icon or nil }, aura, spellId, { unreadable = true })
+            end
+            return
+        end
         local camp = Logic.MatchCampBuff(aura.name, spellId, campList)
         if camp then
-            res.camps[#res.camps + 1] = {
-                key = camp.key, name = camp.name, conflicts = camp.conflicts,
-                icon = (readable(aura.icon) and aura.icon) or camp.icon,
-                expires = AuraExpires(aura), auraName = aura.name, spellId = spellId,
-            }
+            AddCamp(camp, aura, spellId)
             return
         end
         local b = ns.blessingByName[aura.name:lower()]
@@ -758,7 +817,7 @@ local function DumpAuras(unit)
     if not UnitExists(unit) then Print("no unit '%s'", unit) return end
     Print("helpful auras on %s:", UnitFullName(unit) or unit)
     local campList = ns.CampList()
-    local ok = ForEachHelpful(unit, function(a)
+    local ok = ForEachHelpful(unit, function(a, index)
         local id = readable(a.spellId) and a.spellId or "?"
         local tag = ""
         if Logic.MatchCampBuff(a.name, readable(a.spellId) and a.spellId or nil, campList) then
@@ -766,8 +825,21 @@ local function DumpAuras(unit)
         elseif ns.blessingByName[a.name:lower()] then
             tag = AuraIsMine(a) and " |cfff5c542[my blessing]|r" or " |cfff5c542[blessing]|r"
         end
+        local isContainer = Logic.IsCampContainer(a.name, readable(a.spellId) and a.spellId or nil, ns.CAMP_CONTAINER)
+        if isContainer then tag = " |cff40ff40[camp benefits]|r" end
         local exp = AuraExpires(a)
         Print("  %s  (spellId %s)%s %s", a.name, tostring(id), tag, exp and Logic.FormatTime(exp - GetTime()) or "")
+        if isContainer then
+            local lines = AuraTooltipLines(unit, a, index)
+            if not lines then
+                Print("    |cffff6060tooltip could not be read - treating Kings/Might/Wisdom as blocked|r")
+            else
+                local matched = {}
+                for _, c in ipairs(Logic.MatchCampLines(lines, campList)) do matched[#matched + 1] = c.name end
+                for _, l in ipairs(lines) do Print("    | %s", l) end
+                Print("    -> recognised: %s", #matched > 0 and table.concat(matched, ", ") or "nothing that blocks a blessing")
+            end
+        end
     end)
     if not ok then Print("  aura data is restricted right now (combat?) - try again out of combat.") end
 end

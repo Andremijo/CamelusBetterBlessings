@@ -126,6 +126,21 @@ function M.install()
         end,
     }
 
+    -- Camp Benefits style tooltips: aura._tooltip = { "line", ... } or false (unreadable)
+    _G.C_TooltipInfo = {
+        GetUnitBuffByAuraInstanceID = function(t, id)
+            local u = resolve(t)
+            for _, a in ipairs(u and u.auras or {}) do
+                if a.auraInstanceID == id then
+                    if not a._tooltip then return nil end
+                    local lines = {}
+                    for _, l in ipairs(a._tooltip) do lines[#lines + 1] = { leftText = l } end
+                    return { lines = lines }
+                end
+            end
+        end,
+    }
+
     M.inspecting = nil
     _G.CanInspect = function() return true end
     _G.NotifyInspect = function(t) M.inspecting = t end
@@ -160,10 +175,19 @@ function M.load(dir, files, ns)
     end
 end
 
+local nextInstance = 0
 function M.aura(name, opts)
     opts = opts or {}
+    nextInstance = nextInstance + 1
     return { name = name, spellId = opts.spellId, sourceUnit = opts.source, expirationTime = opts.expires or (M.now + 3000),
-             isFromPlayerOrPlayerPet = opts.mine or false, icon = "icon" }
+             isFromPlayerOrPlayerPet = opts.mine or false, icon = "icon", auraInstanceID = nextInstance,
+             _tooltip = opts.tooltip }
+end
+
+-- The single aura WoW Forever shows for everything a campfire gives.
+-- lines = tooltip lines, or false for "tooltip unreadable".
+function M.campBenefits(lines)
+    return M.aura("Camp Benefits", { spellId = 1229741, tooltip = lines })
 end
 
 return M

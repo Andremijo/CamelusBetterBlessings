@@ -146,6 +146,63 @@ function Logic.MatchCampBuff(auraName, spellId, campList)
     return nil
 end
 
+-- Is this the "Camp Benefits" aura that bundles every camp feature?
+function Logic.IsCampContainer(auraName, spellId, container)
+    if not container then return false end
+    if spellId then
+        for _, id in ipairs(container.spellIds or {}) do
+            if id == spellId then return true end
+        end
+    end
+    if type(auraName) == "string" then
+        local lower = auraName:lower()
+        for _, m in ipairs(container.match or {}) do
+            if lower == m then return true end
+        end
+    end
+    return false
+end
+
+-- Which camp features does a Camp Benefits tooltip list?
+-- lines    : tooltip text lines
+-- campList : camp definitions; each may carry localName (the localized
+--            feature name) besides its match strings
+-- Returns a list of matching definitions (each at most once, in campList order).
+function Logic.MatchCampLines(lines, campList)
+    local found = {}
+    if not lines or not campList then return found end
+    local lowered = {}
+    for _, l in ipairs(lines) do
+        if type(l) == "string" then lowered[#lowered + 1] = l:lower() end
+    end
+    for _, c in ipairs(campList) do
+        local names = {}
+        if type(c.localName) == "string" and c.localName ~= "" then names[#names + 1] = c.localName:lower() end
+        for _, m in ipairs(c.match or {}) do names[#names + 1] = m end
+        local hit = false
+        for _, line in ipairs(lowered) do
+            for _, n in ipairs(names) do
+                if n ~= "" and line:find(n, 1, true) then hit = true break end
+            end
+            if hit then break end
+        end
+        if hit then found[#found + 1] = c end
+    end
+    return found
+end
+
+-- Every blessing that some camp buff can block (used when a Camp Benefits
+-- aura exists but its tooltip cannot be read: assume the worst).
+function Logic.AllCampConflicts(campList)
+    local seen, out = {}, {}
+    for _, c in ipairs(campList or {}) do
+        for _, b in ipairs(c.conflicts or {}) do
+            if not seen[b] then seen[b] = true out[#out + 1] = b end
+        end
+    end
+    return out
+end
+
 -- Turn a list of camp buffs on a player into { BLESSING = "Camp buff name" }.
 function Logic.ConflictMap(camps)
     local map = {}
