@@ -692,6 +692,47 @@ local function HookTooltip()
 end
 
 ---------------------------------------------------------------------------
+-- Camp buff re-checks
+-- The game reports buff changes with UNIT_AURA, but when one feature of
+-- Camp Benefits runs out while the aura itself stays, that may not fire.
+-- So, out of combat only:
+--   * a camp buff whose timer has run out is re-read straight away, and
+--   * anyone with Camp Benefits is re-read every CAMP_RECHECK seconds,
+--     spread over the ticks so a full raid never re-reads in one frame.
+---------------------------------------------------------------------------
+local CAMP_RECHECK = 5
+local campCursor = 0
+
+function ns.CampRefreshTick(now)
+    now = now or GetTime()
+    local withCamp = {}
+    for _, guid in ipairs(ns.order) do
+        local st = ns.units[guid]
+        local aura = st and st.aura
+        if aura and (aura.hasCampBenefits or #aura.camps > 0) then
+            withCamp[#withCamp + 1] = st
+            for _, camp in ipairs(aura.camps) do
+                if camp.expires and now >= camp.expires then st.dirty = true break end
+            end
+        end
+    end
+    local n = #withCamp
+    if n == 0 then return end
+    -- enough re-reads per 1 s tick that everyone is covered every CAMP_RECHECK s
+    local budget = math.max(1, math.ceil(n / CAMP_RECHECK))
+    for _ = 1, n do
+        if budget <= 0 then break end
+        campCursor = campCursor % n + 1
+        local st = withCamp[campCursor]
+        if not st.nextCampCheck or now >= st.nextCampCheck then
+            st.dirty = true
+            st.nextCampCheck = now + CAMP_RECHECK
+            budget = budget - 1
+        end
+    end
+end
+
+---------------------------------------------------------------------------
 -- Update scheduling
 ---------------------------------------------------------------------------
 local updateQueued = false
@@ -753,6 +794,7 @@ function handlers.PLAYER_LOGIN()
     C_Timer.NewTicker(1, function()
         if ns.InCombat() then return end
         ProcessInspectQueue()
+        ns.CampRefreshTick()
         ns.Update()
     end)
     if ns.knownDetectionFailed then
