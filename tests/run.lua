@@ -560,6 +560,21 @@ test("bar: player list opens right by default, left with the option", function()
     p = cb.flyout._points
     eq(p.TOPLEFT.relPoint, "TOPRIGHT") eq(p.TOPRIGHT, nil)
 end)
+test("bar: a class that joins later gets the same width as the others", function()
+    -- reproduce the in-game report: widths settle, then a new class joins
+    ns2.UI:FitWidth()
+    local w = ns2.UI.buttonWidth
+    M.units.party5 = { guid = "G-5", name = "Frosty", class = "MAGE", auras = {} }
+    M.fire("GROUP_ROSTER_UPDATE") M.flush()
+    local mage = classRow("MAGE")
+    assert(mage, "mage button should exist")
+    for _, cb in ipairs(ns2.UI.classButtons) do
+        if cb._shown then eq(cb._width, ns2.UI.buttonWidth, cb.class .. " width") end
+    end
+    eq(ns2.UI.buttonWidth, w)
+    M.units.party5 = nil
+    M.fire("GROUP_ROSTER_UPDATE") M.flush()
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)
