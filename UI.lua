@@ -37,7 +37,9 @@ local FLY_W = 210
 local STATUS_W = 38
 local TIMER_W = 36 -- class button countdown
 local ICON = 24
-local HANDLE = 16
+local HANDLE = 14   -- gear size
+local BAR_X = 0     -- the column starts at the bar's left edge; the gear sits on its top-left corner
+local GEAR_LEVEL = 50 -- above class buttons and their flyouts
 local MAX_CAMP_ICONS = 2
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local BLOCKED_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
@@ -188,7 +190,7 @@ function UI:Create()
     if InCombatLockdown() then return end -- retried on PLAYER_REGEN_ENABLED
 
     local f = CreateFrame("Frame", "CBB_MainFrame", UIParent)
-    f:SetSize(HANDLE + 2 + BTN_W, BTN_H)
+    f:SetSize(BAR_X + BTN_W, BTN_H)
     f:SetFrameStrata("MEDIUM")
     f:SetClampedToScreen(true)
     f:SetMovable(true)
@@ -198,7 +200,10 @@ function UI:Create()
     -- Settings button: click to open the settings, drag to move the bar.
     local h = CreateFrame("Button", "CBB_SettingsButton", f)
     h:SetSize(HANDLE, HANDLE)
-    h:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -(BTN_H - HANDLE) / 2)
+    -- Pinned on the bar's top-left corner and drawn above everything else on
+    -- the bar, so a flyout opening to the left can never cover it.
+    h:SetPoint("CENTER", f, "TOPLEFT", 0, 0)
+    h:SetFrameLevel(f:GetFrameLevel() + GEAR_LEVEL)
     h:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
     h:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
     h:RegisterForDrag("LeftButton")
@@ -227,7 +232,7 @@ function UI:Create()
 
     -- Smart button (also bindable: Key Bindings > AddOns)
     local sb = MakeButton("CBB_SmartButton", f, BTN_W)
-    sb:SetPoint("TOPLEFT", f, "TOPLEFT", HANDLE + 2, 0)
+    sb:SetPoint("TOPLEFT", f, "TOPLEFT", BAR_X, 0)
     sb.text:SetFontObject("GameFontHighlightSmall")
     sb.text:ClearAllPoints()
     sb.text:SetPoint("LEFT", sb.icon1, "RIGHT", 4, 0)
@@ -448,7 +453,7 @@ function UI:Layout()
             cb.class = class
             self:AnchorFlyout(cb)
             cb:ClearAllPoints()
-            cb:SetPoint("TOPLEFT", self.main, "TOPLEFT", HANDLE + 2, -(ci - 1 + top) * (BTN_H + GAP))
+            cb:SetPoint("TOPLEFT", self.main, "TOPLEFT", BAR_X, -(ci - 1 + top) * (BTN_H + GAP))
             cb:Show()
             for pi, st in ipairs(members) do
                 local pb = cb.flyout.buttons[pi] or CreatePlayerButton(cb.flyout, pi)
@@ -487,7 +492,7 @@ function UI:UpdateFooter()
     if not self.main then return end
     local text = ns.targetWarning
     self.footer:ClearAllPoints()
-    self.footer:SetPoint("TOPLEFT", self.main, "BOTTOMLEFT", HANDLE + 4, -3)
+    self.footer:SetPoint("TOPLEFT", self.main, "BOTTOMLEFT", BAR_X + 2, -3)
     self.footer:SetText(text or "")
     self.footer:SetShown(text ~= nil)
 end
@@ -748,7 +753,7 @@ function UI:FitWidth()
         if cb:GetWidth() ~= w then cb:SetWidth(w) end
     end
     if self.smart and self.smart:GetWidth() ~= w then self.smart:SetWidth(w) end
-    self.main:SetWidth(HANDLE + 2 + w)
+    self.main:SetWidth(BAR_X + w)
 end
 
 ---------------------------------------------------------------------------

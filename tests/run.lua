@@ -546,6 +546,19 @@ test("bar: gear left-click opens settings, right-click opens Players", function(
     gear._scripts.OnClick(gear, "LeftButton")
     eq(ns2.Config.frame._shown, true)
 end)
+test("bar: the gear sits on the bar's top-left corner, above the flyouts", function()
+    local gear, main = ns2.UI.handle, ns2.UI.main
+    eq(gear._points.CENTER.rel, main)
+    eq(gear._points.CENTER.relPoint, "TOPLEFT")
+    assert(gear:GetFrameLevel() > main:GetFrameLevel() + 10, "gear must be drawn above the bar")
+    -- the column starts at the bar's left edge (no room reserved left of it any more)
+    for _, cb in ipairs(ns2.UI.classButtons) do
+        if cb._shown then
+            eq(cb._points.TOPLEFT.x, 0)
+            assert(gear:GetFrameLevel() > cb.flyout:GetFrameLevel(), "gear above the flyout")
+        end
+    end
+end)
 test("bar: player list opens right by default, left with the option", function()
     local cb = classRow("SHAMAN")
     local p = cb.flyout._points

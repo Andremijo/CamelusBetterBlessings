@@ -92,8 +92,9 @@ weaving, so set it in the Players tab.
     and the time left.
   - **Click a red player** to give them the blessing set up for them, when
     you want a specific player rather than the next one.
-- **The gear** next to the bar: left-click opens the settings, right-click
-  opens the Players tab directly, and dragging it moves the bar.
+- **The gear** on the bar's top-left corner: left-click opens the settings,
+  right-click opens the Players tab directly, and dragging it moves the bar.
+  It always stays on top, so a flyout opening to the left never covers it.
 - **Smart button key binding:** Key Bindings → AddOns → *Camelus' Better
   Blessings*. It blesses the next player who needs it, tanks first. It works
   without being on the bar, but the Options tab can show it there.

@@ -128,8 +128,9 @@ Swedish. Reply in the language they write in.
 ## UI decisions the owner made (keep them)
 
 - **Compact, Pally Power style, no header.**
-  - A gear (left-click: settings; right-click: Players tab; drag: move), then a
-    column of class buttons.
+  - A column of class buttons, with a small gear pinned on the bar's top-left
+    corner (left-click: settings; right-click: Players tab; drag: move). The
+    gear is drawn above everything, so a left-opening flyout never covers it.
   - Each class button shows the class icon, the Greater Blessing icon, one icon
     per distinct camp buff in the class, and a countdown timer.
 - **Rows are packed tight,** with about a 3 px visible gap. All class buttons
