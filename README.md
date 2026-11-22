@@ -106,12 +106,15 @@ Settings → AddOns):
     the class header.
   - Left-click or scroll a slot to pick the next blessing; right-click to go
     back.
-- **Players tab:** every group member and their role.
-  - Roles start on **Auto** (from the group role and talents). The tab shows
-    what Auto picked and why.
+- **Players tab:** laid out like the raid window, with Group 1–8 in a grid of
+  up to five players each. A full 40-player raid fits without scrolling; a
+  party shows only Group 1.
+  - Each player has a role button: `Auto HEAL` when detected, or `TANK` when
+    set by you.
   - Click the role button to set it yourself; right-click to go back. Your
     choice is saved per player.
-  - It also shows the blessing order that player will get.
+  - Hover a player to see what Auto picked and why (group role or talents),
+    and the blessing order they will get.
 - **Options tab:** camp buff protection, Greater Blessing blocking, respecting
   other paladins, target warning, tooltips, smart button, bar lock and scale,
   and the refresh warning time.

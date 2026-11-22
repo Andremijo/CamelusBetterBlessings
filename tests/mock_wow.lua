@@ -49,6 +49,7 @@ M.methods = {
     GetText = function(self) return self._text end,
     SetTexture = function(self, t) self._texture = t end,
     SetChecked = function(self, v) self._checked = v end,
+    SetEnabled = function(self, v) self._enabled = v and true or false end,
     GetChecked = function(self) return self._checked end,
     CreateTexture = function(self) return newObject("Texture") end,
     CreateFontString = function(self) return newObject("FontString") end,

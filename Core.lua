@@ -522,6 +522,12 @@ function ns.RebuildRoster()
             st.unit = unit
             st.name = UnitFullName(unit) or st.name or "?"
             st.class = select(2, UnitClass(unit)) or st.class
+            st.subgroup = 1
+            local idx = tonumber(unit:match("^raid(%d+)$"))
+            if idx and GetRaidRosterInfo then
+                local ok, _, _, sub = pcall(GetRaidRosterInfo, idx)
+                if ok and readable(sub) and type(sub) == "number" then st.subgroup = sub end
+            end
             st.dirty = true
             ns.units[guid] = st
             ns.order[#ns.order + 1] = guid

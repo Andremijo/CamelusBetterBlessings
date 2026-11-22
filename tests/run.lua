@@ -558,6 +558,46 @@ test("settings: classes are headers, roles are sub-rows only when a class has se
         end
     end
 end)
+test("players tab: a raid is shown in Group 1-8 boxes, like the raid window", function()
+    local savedUnits = M.units
+    local savedInRaid, savedNum, savedInfo = IsInRaid, GetNumGroupMembers, GetRaidRosterInfo
+    M.units = {}
+    for i = 1, 12 do
+        M.units["raid" .. i] = { guid = "RG-" .. i, name = "Raider" .. i,
+            class = (i % 2 == 0) and "WARRIOR" or "MAGE", auras = {} }
+    end
+    M.units.player = M.units.raid1
+    IsInRaid = function() return true end
+    GetNumGroupMembers = function() return 12 end
+    GetRaidRosterInfo = function(i) return "Raider" .. i, 0, math.floor((i - 1) / 5) + 1 end
+    M.fire("GROUP_ROSTER_UPDATE") M.flush()
+    ns2.Config:Toggle("players")
+    local cfg = ns2.Config
+    local function shownIn(g)
+        local n = 0
+        for slot = 1, 5 do
+            local row = cfg.slotsByGroup[g][slot]
+            if row and row._shown then n = n + 1 end
+        end
+        return n
+    end
+    eq(shownIn(1), 5) eq(shownIn(2), 5) eq(shownIn(3), 2) eq(shownIn(4), 0)
+    for g = 1, 8 do eq(cfg.groupBoxes[g]._shown, true) end     -- all 8 boxes in a raid
+    eq(#cfg.playerRows, 12)                                    -- everyone visible, no scrolling
+    -- the third player of group 2 is raid8
+    eq(cfg.slotsByGroup[2][3].guid, "RG-8")
+    -- mages have one role: button disabled; warriors can change
+    local mageRow, warRow = cfg.slotsByGroup[1][1], cfg.slotsByGroup[1][2]
+    eq(mageRow.roleButton._enabled, false)
+    eq(warRow.roleButton._enabled, true)
+    -- restore the party scenario
+    M.units = savedUnits
+    IsInRaid, GetNumGroupMembers, GetRaidRosterInfo = savedInRaid, savedNum, savedInfo
+    M.fire("GROUP_ROSTER_UPDATE") M.flush()
+    ns2.Config:RefreshPlayers(true)
+    eq(cfg.groupBoxes[1]._shown, true)
+    eq(cfg.groupBoxes[2]._shown, false)                        -- party: only Group 1
+end)
 test("integration: config clicks", function()
     ns2.Config:Toggle("blessings")
     local row, header
