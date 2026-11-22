@@ -536,6 +536,30 @@ test("bar: Pally Power style timers, counting down in combat too", function()
     M.units.party1.auras = {}
     M.fire("UNIT_AURA", "party1") M.flush()
 end)
+test("bar: gear left-click opens settings, right-click opens Players", function()
+    local gear = ns2.UI.handle
+    ns2.Config.frame._shown = false
+    gear._scripts.OnClick(gear, "RightButton")
+    eq(ns2.Config.frame._shown, true)
+    eq(ns2.Config.activeTab, "players")
+    ns2.Config.frame._shown = false
+    gear._scripts.OnClick(gear, "LeftButton")
+    eq(ns2.Config.frame._shown, true)
+end)
+test("bar: player list opens right by default, left with the option", function()
+    local cb = classRow("SHAMAN")
+    local p = cb.flyout._points
+    eq(p.TOPLEFT.rel, cb) eq(p.TOPLEFT.relPoint, "TOPRIGHT")
+    ns2.opt.flyoutLeft = true
+    ns2.RequestUpdate(true) M.flush()
+    p = cb.flyout._points
+    eq(p.TOPRIGHT.rel, cb) eq(p.TOPRIGHT.relPoint, "TOPLEFT")
+    eq(p.TOPLEFT, nil)
+    ns2.opt.flyoutLeft = false
+    ns2.RequestUpdate(true) M.flush()
+    p = cb.flyout._points
+    eq(p.TOPLEFT.relPoint, "TOPRIGHT") eq(p.TOPRIGHT, nil)
+end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
     assert(not rogue.role._text:find("?", 1, true), rogue.role._text)

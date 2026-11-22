@@ -209,11 +209,16 @@ function UI:Create()
         f:StopMovingOrSizing()
         UI:SavePosition()
     end)
-    h:SetScript("OnClick", function() if ns.Config then ns.Config:Toggle() end end)
+    h:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    h:SetScript("OnClick", function(_, mouse)
+        if not ns.Config then return end
+        if mouse == "RightButton" then ns.Config:Toggle("players") else ns.Config:Toggle() end
+    end)
     h:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Camelus' Better Blessings")
-        GameTooltip:AddLine("Click: settings", 0.5, 0.8, 1)
+        GameTooltip:AddLine("Left-click: settings", 0.5, 0.8, 1)
+        GameTooltip:AddLine("Right-click: Players (roles)", 0.5, 0.8, 1)
         GameTooltip:AddLine(ns.opt.locked and "Bar is locked (unlock in Options)." or "Drag: move the bar", 0.8, 0.8, 0.8)
         GameTooltip:Show()
     end)
@@ -319,7 +324,7 @@ local function CreateClassButton(i)
     end
 
     local fly = CreateFrame("Frame", nil, b)
-    fly:SetPoint("TOPLEFT", b, "TOPRIGHT", FLY_GAP, 0)
+    UI:AnchorFlyout(b, fly)
     fly:SetSize(FLY_W, BTN_H)
     fly:Hide()
     fly.buttons = {}
@@ -341,7 +346,21 @@ end
 
 ---------------------------------------------------------------------------
 -- flyouts (opened by hovering a class button, out of combat)
+-- Option "flyoutLeft": open to the left of the bar instead of the right.
 ---------------------------------------------------------------------------
+function UI:AnchorFlyout(cb, fly)
+    fly = fly or cb.flyout
+    local left = ns.opt.flyoutLeft and true or false
+    if fly.anchoredLeft == left then return end
+    fly.anchoredLeft = left
+    fly:ClearAllPoints()
+    if left then
+        fly:SetPoint("TOPRIGHT", cb, "TOPLEFT", -FLY_GAP, 0)
+    else
+        fly:SetPoint("TOPLEFT", cb, "TOPRIGHT", FLY_GAP, 0)
+    end
+end
+
 function UI:OpenFlyout(cb)
     if InCombatLockdown() or not cb.class then return end
     self:CancelFlyoutClose()
@@ -427,6 +446,7 @@ function UI:Layout()
             local cb = self.classButtons[ci] or CreateClassButton(ci)
             self.classButtons[ci] = cb
             cb.class = class
+            self:AnchorFlyout(cb)
             cb:ClearAllPoints()
             cb:SetPoint("TOPLEFT", self.main, "TOPLEFT", HANDLE + 2, -(ci - 1 + top) * (BTN_H + GAP))
             cb:Show()

@@ -83,7 +83,8 @@ weaving, so set it in the Players tab.
     to one and the next gives Wisdom to the other.
   - It skips players who already have theirs, are out of range or dead, or
     whose every option would replace a camp buff.
-- **Hover a class button** to open a flyout to the right, with one button per
+- **Hover a class button** to open a flyout to the right (or to the left, set
+  in Options), with one button per
   player:
   - Players are green when buffed and red when missing.
   - Purple means every option would replace a camp buff.
@@ -91,7 +92,8 @@ weaving, so set it in the Players tab.
     and the time left.
   - **Click a red player** to give them the blessing set up for them, when
     you want a specific player rather than the next one.
-- **The gear** next to the bar opens the settings. Drag it to move the bar.
+- **The gear** next to the bar: left-click opens the settings, right-click
+  opens the Players tab directly, and dragging it moves the bar.
 - **Smart button key binding:** Key Bindings → AddOns → *Camelus' Better
   Blessings*. It blesses the next player who needs it, tanks first. It works
   without being on the bar, but the Options tab can show it there.
