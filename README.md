@@ -120,35 +120,29 @@ WoWUp checks this repository's releases for the zip that matches WoW Forever.
 
 ## Releasing (for maintainers)
 
-Releases are built by `.github/workflows/release.yml`. Start one in either of
-these ways:
+Releases are automatic. You never create tags or releases by hand.
 
-```bash
-git tag v1.0.0
-```
+1. Bump `## Version:` in `CamelusBetterBlessings.toc` (for example `1.0.0` → `1.1.0`).
+2. Merge that change into `main`.
 
-```bash
-git push origin v1.0.0
-```
-
-Or go to **Actions → Release → Run workflow** and enter a version such as
-`v1.0.0`.
-
-The workflow does the following:
+`.github/workflows/release.yml` runs on every push to `main`. If the `.toc`
+version has not been released yet, it does the following:
 
 1. Runs the syntax checks and the test suite.
-2. Puts the version into the `.toc` (`## Version: @project-version@`).
-3. Builds `CamelusBetterBlessings-<version>-forever.zip`, with the addon folder
-   inside.
-4. Builds a BigWigs-style `release.json` with flavor `forever` and the
+2. Builds `CamelusBetterBlessings-v<version>-forever.zip`, with the addon
+   folder inside.
+3. Builds a BigWigs-style `release.json` with flavor `forever` and the
    interface number from the `.toc`.
-5. Publishes a GitHub release with both files.
+4. Publishes a GitHub release tagged `v<version>` with both files.
+
+If the version was already released, the workflow does nothing. Merges that
+don't change the version publish no release.
 
 WoWUp finds WoW Forever builds by a `-forever.zip` / `-camelot.zip` file name
 suffix, or by a `forever` entry in `release.json`. Both are provided. It only
-looks at the 5 most recent releases. Versions with a suffix (for example
-`v1.1.0-beta.1`) are published as pre-releases, so only WoWUp users on the
-Beta/Alpha channel see them.
+looks at the 5 most recent releases. A version with a suffix (for example
+`1.1.0-beta.1`) is published as a pre-release, so only WoWUp users on the
+Beta/Alpha channel see it.
 
 When Blizzard patches WoW Forever, update `## Interface:` in
 `CamelusBetterBlessings.toc`. In game, `/dump select(4, GetBuildInfo())` shows
