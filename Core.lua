@@ -104,7 +104,6 @@ local function InitDB()
     c.assign = c.assign or {}
     c.greater = c.greater or {}
     c.overrides = c.overrides or {}
-    c.collapsed = c.collapsed or {}
     c.options = c.options or {}
     for k, v in pairs(ns.DEFAULT_OPTIONS) do
         if c.options[k] == nil then c.options[k] = v end
@@ -701,6 +700,7 @@ function ns.Update()
     end
     ns.EvaluateAll()
     if ns.UI then ns.UI:Refresh() end
+    if ns.Config then ns.Config:RefreshPlayers() end
 end
 
 local function MarkAllDirty()
@@ -731,6 +731,7 @@ function handlers.PLAYER_LOGIN()
     ns.RefreshSpells()
     HookTooltip()
     ns.UI:Create()
+    if ns.Config then ns.Config:RegisterSettingsPanel() end
     ns.RequestUpdate(true)
     C_Timer.NewTicker(1, function()
         if ns.InCombat() then return end
@@ -798,7 +799,7 @@ end
 function handlers.PLAYER_REGEN_ENABLED()
     if ns.isPaladin and ns.UI and not ns.UI.main then ns.UI:Create() end
     MarkAllDirty()
-    if ns.UI then ns.UI:SetCombat(false) end
+    if ns.UI then ns.UI:SetCombat(false) ns.UI:CloseFlyouts() end
     ns.RequestUpdate(true)
     ns.UpdateTargetWarning()
 end
@@ -865,7 +866,8 @@ end
 local function Help()
     Print("commands:")
     Print("  /cbb - show / hide the blessing bar")
-    Print("  /cbb config - open the assignment grid")
+    Print("  /cbb config - settings (Blessings / Players / Options)")
+    Print("  /cbb players - set up roles for your group")
     Print("  /cbb lock - lock / unlock the bar")
     Print("  /cbb role <player> <auto|tank|healer|melee|ranged|caster> - set a player's role")
     Print("  /cbb roles - list detected roles")
@@ -888,8 +890,10 @@ SlashCmdList.CAMELUSBETTERBLESSINGS = function(msg)
         if not ns.isPaladin then Print("only paladins get a blessing bar.") return end
         ns.opt.hidden = not ns.opt.hidden
         if ns.UI then ns.UI:UpdateVisibility() end
-    elseif cmd == "config" or cmd == "options" or cmd == "assign" then
+    elseif cmd == "config" or cmd == "options" or cmd == "assign" or cmd == "settings" then
         if ns.Config then ns.Config:Toggle() end
+    elseif cmd == "players" then
+        if ns.Config then ns.Config:Toggle("players") end
     elseif cmd == "lock" then
         ns.opt.locked = not ns.opt.locked
         Print("bar %s.", ns.opt.locked and "locked" or "unlocked")

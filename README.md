@@ -47,7 +47,7 @@ This addon handles that for you.
 
 The first source that gives an answer wins:
 
-1. **Your manual choice.** Right-click a player row to cycle the role, or use
+1. **Your manual choice,** set in the settings window's Players tab, or with
    `/cbb role <name> <role>`. It is saved per player name.
 2. **Group role** (Tank / Healer) from the group finder or the leader.
 3. **Talents**, read by inspecting each group member out of combat. The tree
@@ -59,20 +59,46 @@ Roles are Tank, Healer, Melee DPS, Ranged (physical, hunters) and Caster DPS.
 
 ## Using it
 
-- **Bar:** each class has a header row (its Greater Blessing) and one row per
-  player under it.
-  - Row colours: green = has it, yellow = refresh soon, red = missing,
-    orange = would swap your other blessing, purple = blocked by camp buffs,
-    grey = out of range / dead / offline.
-  - **Left-click** a player row to cast its blessing.
-  - **Right-click** a player row to change their role.
-  - **Left-click** a class row to cast its Greater Blessing. **Right-click** it
-    (or Shift-right-click) to change which Greater Blessing it casts.
-  - The `+` / `-` button folds a class open or closed.
-- **Assignment grid:** open it with the cog on the bar or `/cbb config`.
-  - Left-click or scroll a slot to pick the next blessing; right-click to go back.
-  - The options checkboxes are at the bottom.
-- **Key binding:** Key Bindings → AddOns → *Camelus' Better Blessings*.
+**The bar only casts.** It's a compact column in the style of Pally Power:
+
+- **Class buttons.** Each one shows the class icon and that class's Greater
+  Blessing. The colour tells you who needs what:
+  - red: someone in the class is missing their blessing
+  - green: everyone has theirs
+  - yellow: a blessing is running out soon
+  - grey: the players who need one are out of range or dead
+- **Click a class button** to cast its Greater Blessing. A red ✕ over the
+  icon means it is blocked because it would replace someone's camp buff.
+- **Hover a class button** to open a flyout to the right, with one button per
+  player:
+  - Players are green when buffed and red when missing.
+  - Purple means every option would replace a camp buff.
+  - Each button shows the blessing it will cast, their role, their camp buffs
+    and the time left.
+  - **Click a red player** to give them the blessing set up for them.
+- **The gear** next to the bar opens the settings. Drag it to move the bar.
+- **Smart button key binding:** Key Bindings → AddOns → *Camelus' Better
+  Blessings*. It blesses the next player who needs it, tanks first. It works
+  without being on the bar, but the Options tab can show it there.
+
+In combat the bar freezes and player flyouts don't open. Blizzard doesn't allow
+addon buttons to change in combat. Everything updates again when combat ends.
+
+**All setup happens in the settings window** (the gear, `/cbb config`, or
+Settings → AddOns):
+
+- **Blessings tab:** for every class/role pair, up to three blessings in
+  priority order, plus the Greater Blessing per class. Left-click or scroll a
+  slot to pick the next blessing; right-click to go back.
+- **Players tab:** every group member and their role.
+  - Roles start on **Auto** (from the group role and talents). The tab shows
+    what Auto picked and why.
+  - Click the role button to set it yourself; right-click to go back. Your
+    choice is saved per player.
+  - It also shows the blessing order that player will get.
+- **Options tab:** camp buff protection, Greater Blessing blocking, respecting
+  other paladins, target warning, tooltips, smart button, bar lock and scale,
+  and the refresh warning time.
 
 ### Commands
 

@@ -229,7 +229,8 @@ function Logic.CycleBlessing(current, dir, allowNone)
 end
 
 -- Cycle a manual role override: nil(auto) -> class roles... -> nil
-function Logic.CycleRole(class, current)
+-- dir: 1 = next (default), -1 = previous
+function Logic.CycleRole(class, current, dir)
     local roles = ns.CLASS_ROLES[class] or {}
     local list = { false }
     for _, r in ipairs(roles) do list[#list + 1] = r end
@@ -237,8 +238,8 @@ function Logic.CycleRole(class, current)
     for i, r in ipairs(list) do
         if r == (current or false) then idx = i break end
     end
-    idx = idx + 1
-    if idx > #list then idx = 1 end
+    idx = idx + (dir or 1)
+    if idx > #list then idx = 1 elseif idx < 1 then idx = #list end
     return list[idx] or nil
 end
 

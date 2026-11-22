@@ -200,11 +200,14 @@ test("integration: camp buffs steer the choice", function()
     eq(st("G-P").choice.blessing, "WISDOM")
 end)
 
+-- Player buttons live in each class button's hover flyout.
 local function rowFor(guid)
-    for _, r in ipairs(ns2.UI.playerRows) do if r.guid == guid and r._shown then return r end end
+    for _, cb in ipairs(ns2.UI.classButtons) do
+        for _, b in ipairs(cb.flyout.buttons) do if b.guid == guid and b._shown then return b end end
+    end
 end
 local function classRow(class)
-    for _, r in ipairs(ns2.UI.classRows) do if r.class == class and r._shown then return r end end
+    for _, r in ipairs(ns2.UI.classButtons) do if r.class == class and r._shown then return r end end
 end
 
 test("integration: secure rows cast the chosen blessing", function()
@@ -304,24 +307,64 @@ test("integration: /cbb auras prints Camp Benefits lines", function()
     assert(text:find("recognised: Fish Bowl"), "recognised line missing")
 end)
 test("integration: other slash commands run", function()
-    for _, c in ipairs({ "", "", "lock", "lock", "roles", "auras party2", "camp list", "camp del 4", "refresh 10", "scale 1.2", "help", "config", "config", "reset" }) do
+    for _, c in ipairs({ "", "", "lock", "lock", "roles", "auras party2", "camp list", "camp del 4", "refresh 10", "scale 1.2", "help", "config", "config", "players", "reset" }) do
         SlashCmdList.CAMELUSBETTERBLESSINGS(c)
     end
     M.flush()
 end)
 test("integration: tooltips render", function()
-    for _, r in ipairs(ns2.UI.playerRows) do if r._shown then ns2.UI:PlayerTooltip(r) end end
-    for _, r in ipairs(ns2.UI.classRows) do if r._shown then ns2.UI:ClassTooltip(r) end end
+    for _, cb in ipairs(ns2.UI.classButtons) do
+        if cb._shown then
+            ns2.UI:ClassTooltip(cb)
+            for _, b in ipairs(cb.flyout.buttons) do if b._shown then ns2.UI:PlayerTooltip(b) end end
+        end
+    end
     ns2.UI:SmartTooltip(ns2.UI.smart)
+end)
+test("bar: no header, smart row hidden by default, flyout opens on hover", function()
+    eq(ns2.UI.smart._shown, false)
+    local cb = classRow("SHAMAN")
+    eq(cb.flyout._shown, false)
+    for _, fn in ipairs(cb._hooks.OnEnter) do fn(cb) end
+    eq(cb.flyout._shown, true)
+    eq(#cb.flyout.buttons, 2)
+    ns2.UI:CloseFlyouts()
+    eq(cb.flyout._shown, false)
+end)
+test("bar: class colour shows who is missing a blessing", function()
+    local cb = classRow("SHAMAN")
+    local c = cb.bg._color
+    assert(c and c[1] > c[2], "shaman button should be red (someone missing)")
+end)
+test("bar: no setting changes from the bar", function()
+    for _, cb in ipairs(ns2.UI.classButtons) do
+        assert(not cb._hooks.OnMouseUp, "class buttons must not change settings")
+        for _, b in ipairs(cb.flyout.buttons) do assert(not b._hooks.OnMouseUp, "player buttons must not change settings") end
+    end
+end)
+test("bar: single-role classes have no '?' on their role", function()
+    local rogue = rowFor("G-4")
+    assert(not rogue.role._text:find("?", 1, true), rogue.role._text)
 end)
 test("integration: target warning", function()
     M.target = "party3"
     M.fire("PLAYER_TARGET_CHANGED")
     assert(ns2.targetWarning and ns2.targetWarning:find("Lodestone"), "expected a Lodestone warning")
 end)
+test("integration: players tab sets roles", function()
+    ns2.Config:Toggle("players")
+    local row
+    for _, r in ipairs(ns2.Config.playerRows) do if r.guid == "G-3" then row = r end end
+    assert(row, "Enhy should be listed")
+    row.roleButton._scripts.OnClick(row.roleButton, "LeftButton")   -- Auto -> Healer
+    eq(ns2.db.overrides["Enhy"], "HEALER")
+    row.roleButton._scripts.OnClick(row.roleButton, "RightButton")  -- back to Auto
+    eq(ns2.db.overrides["Enhy"], nil)
+    M.flush()
+end)
 test("integration: config clicks", function()
-    ns2.Config:Toggle()
-    local row = ns2.Config.rows[1]
+    ns2.Config:Toggle("blessings")
+    local row = ns2.Config.slotRows[1]
     row.slots[1]._scripts.OnClick(row.slots[1], "LeftButton")
     eq(ns2.db.assign["WARRIOR:TANK"][1], false)
     row.greater._scripts.OnClick(row.greater, "RightButton")

@@ -1,34 +1,44 @@
--- Camelus' Better Blessings - the blessing bar (secure click-to-cast rows)
+-- Camelus' Better Blessings - the casting bar
 --
--- Every row is a SecureActionButton. Out of combat the addon decides what
--- each row casts; when a blessing would overwrite a camp buff the row simply
--- has no spell attached, so clicking it cannot overwrite anything.
--- In combat everything is frozen (Blizzard does not allow secure buttons to
--- change, and aura data is restricted), and refreshes once combat ends.
+-- A compact, Pally Power style column:
+--   (gear) [class icon | greater]  - click: Greater Blessing for the class
+--          ...                       hover: flyout with one button per player
+--   Colours: red = someone is missing their blessing, green = all buffed,
+--   yellow = running out soon, grey = out of range / dead, purple = blocked
+--   by camp buffs. Click a red player in the flyout to bless them.
+--
+-- The bar only casts. Every setting (assignments, roles, options) lives in the
+-- settings window (the gear, or /cbb config). The smart button ("bless the
+-- next player who needs it") is key-bindable and can be shown on the bar.
+--
+-- All buttons are SecureActionButtons. Out of combat the addon decides what
+-- each one casts; a blessing that would overwrite a camp buff is simply not
+-- attached, so clicking cannot overwrite anything. In combat everything is
+-- frozen (Blizzard does not allow secure buttons to change, and aura data is
+-- restricted) and refreshes once combat ends.
 local _, ns = ...
 local Logic = ns.Logic
 
 local UI = {}
 ns.UI = UI
 
-local WIDTH = 280
-local ROW_H = 20
-local PAD = 4
-local HEADER_H = 26
-local INNER_W = WIDTH - PAD * 2
-local MAX_CAMP_ICONS = 3
+local BTN_W, BTN_H, GAP = 112, 28, 2
+local FLY_W = 190
+local ICON = 22
+local HANDLE = 16
+local MAX_CAMP_ICONS = 2
 local QUESTION = "Interface\\Icons\\INV_Misc_QuestionMark"
 local BLOCKED_ICON = "Interface\\Buttons\\UI-GroupLoot-Pass-Up"
 
 local STATUS_COLORS = {
-    OK      = { 0.10, 0.55, 0.10 },
-    REFRESH = { 0.80, 0.65, 0.10 },
-    MISSING = { 0.70, 0.10, 0.10 },
-    SWAP    = { 0.85, 0.40, 0.10 },
-    BLOCKED = { 0.45, 0.10, 0.55 },
-    NONE    = { 0.25, 0.25, 0.25 },
-    PENDING = { 0.20, 0.40, 0.75 },
-    FAR     = { 0.30, 0.30, 0.30 },
+    OK      = { 0.10, 0.50, 0.10 },
+    REFRESH = { 0.75, 0.62, 0.10 },
+    MISSING = { 0.65, 0.08, 0.08 },
+    SWAP    = { 0.80, 0.38, 0.08 },
+    BLOCKED = { 0.40, 0.10, 0.50 },
+    NONE    = { 0.22, 0.22, 0.22 },
+    PENDING = { 0.18, 0.36, 0.70 },
+    FAR     = { 0.28, 0.28, 0.28 },
 }
 
 local ROLE_SOURCE_TEXT = {
@@ -38,9 +48,10 @@ local ROLE_SOURCE_TEXT = {
     ["group+class"] = "group says DPS, class guess",
     class = "class guess",
 }
+ns.ROLE_SOURCE_TEXT = ROLE_SOURCE_TEXT
 
 ---------------------------------------------------------------------------
--- small helpers
+-- small helpers (shared with Config.lua through ns)
 ---------------------------------------------------------------------------
 local function ClassColor(class)
     if class and C_ClassColor and C_ClassColor.GetClassColor then
@@ -68,6 +79,7 @@ local function ShortName(name)
     end
     return name:match("^[^-]+") or name
 end
+ns.ShortName = ShortName
 
 local function SetClassIcon(tex, class)
     if class and CLASS_ICON_TCOORDS and CLASS_ICON_TCOORDS[class] then
@@ -78,191 +90,243 @@ local function SetClassIcon(tex, class)
         if not pcall(tex.SetAtlas, tex, "classicon-" .. class:lower()) then tex:SetTexture(QUESTION) end
     end
 end
+ns.SetClassIcon = SetClassIcon
 
-local function RoleText(role, source)
+-- Role tag, with "?" only when the role is a guess AND the class has a choice.
+local function RoleText(role, source, class)
     local info = ns.ROLE_INFO[role]
     if not info then return "?" end
     local c = info.color
-    local guess = (source == "class" or source == "group+class") and "?" or ""
-    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, info.short, guess)
+    local choices = class and ns.CLASS_ROLES[class]
+    local guess = (source == "class" or source == "group+class") and choices and #choices > 1
+    return string.format("|cff%02x%02x%02x%s%s|r", c[1] * 255, c[2] * 255, c[3] * 255, info.short, guess and "?" or "")
 end
+ns.RoleText = RoleText
 
 local function BlessingShort(key)
     return key and ns.BLESSINGS[key] and ns.BLESSINGS[key].short or "-"
 end
-
-local function Hex(r, g, b) return string.format("|cff%02x%02x%02x", r * 255, g * 255, b * 255) end
+ns.BlessingShort = BlessingShort
 
 ---------------------------------------------------------------------------
--- frame creation
+-- button factory
 ---------------------------------------------------------------------------
-local function MakeRowBase(name, isClass)
-    local b = CreateFrame("Button", name, UI.main, "SecureActionButtonTemplate")
-    b:SetSize(INNER_W, ROW_H)
+local BORDER = {
+    edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 10,
+    insets = { left = 2, right = 2, top = 2, bottom = 2 },
+}
+
+local function MakeButton(name, parent, width)
+    local b = CreateFrame("Button", name, parent, "SecureActionButtonTemplate, BackdropTemplate")
+    b:SetSize(width, BTN_H)
     b:RegisterForClicks("AnyUp", "AnyDown")
+    if b.SetBackdrop then
+        b:SetBackdrop(BORDER)
+        b:SetBackdropBorderColor(0.55, 0.55, 0.55, 1)
+    end
     b.bg = b:CreateTexture(nil, "BACKGROUND")
-    b.bg:SetAllPoints()
-    b.bg:SetColorTexture(0, 0, 0, 0)
+    b.bg:SetPoint("TOPLEFT", 2, -2)
+    b.bg:SetPoint("BOTTOMRIGHT", -2, 2)
+    b.bg:SetColorTexture(0.2, 0.2, 0.2, 0.8)
     local hl = b:CreateTexture(nil, "HIGHLIGHT")
-    hl:SetAllPoints()
-    hl:SetColorTexture(1, 1, 1, 0.10)
-    b.icon = b:CreateTexture(nil, "ARTWORK")
-    b.icon:SetSize(ROW_H - 2, ROW_H - 2)
-    b.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    b.status = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    b.status:SetJustifyH("RIGHT")
-    b.status:SetWidth(54)
-    b.name = b:CreateFontString(nil, "OVERLAY", isClass and "GameFontNormalSmall" or "GameFontHighlightSmall")
-    b.name:SetJustifyH("LEFT")
-    if b.name.SetWordWrap then b.name:SetWordWrap(false) end
+    hl:SetPoint("TOPLEFT", 2, -2)
+    hl:SetPoint("BOTTOMRIGHT", -2, 2)
+    hl:SetColorTexture(1, 1, 1, 0.15)
+    b.icon1 = b:CreateTexture(nil, "ARTWORK")
+    b.icon1:SetSize(ICON, ICON)
+    b.icon1:SetPoint("LEFT", b, "LEFT", 4, 0)
+    b.icon1:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    b.text:SetJustifyH("RIGHT")
+    b.text:SetPoint("RIGHT", b, "RIGHT", -6, 0)
     b:Hide()
     return b
 end
 
-local function CreatePlayerRow(i)
-    local b = MakeRowBase("CBB_PlayerRow" .. i, false)
-    b.icon:SetPoint("LEFT", b, "LEFT", 12, 0)
-    b.role = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    b.role:SetPoint("LEFT", b.icon, "RIGHT", 4, 0)
-    b.role:SetWidth(34)
-    b.role:SetJustifyH("LEFT")
-    b.name:SetPoint("LEFT", b.role, "RIGHT", 2, 0)
-    b.name:SetWidth(96)
-    b.status:SetPoint("RIGHT", b, "RIGHT", -3, 0)
-    b.camp = {}
-    for j = 1, MAX_CAMP_ICONS do
-        local t = b:CreateTexture(nil, "OVERLAY")
-        t:SetSize(14, 14)
-        t:SetPoint("RIGHT", b, "RIGHT", -58 - (j - 1) * 16, 0)
-        t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-        t:Hide()
-        b.camp[j] = t
-    end
-    b:HookScript("OnEnter", function(self) UI:PlayerTooltip(self) end)
-    b:HookScript("OnLeave", function() GameTooltip:Hide() end)
-    b:HookScript("OnMouseUp", function(self, mouse)
-        if mouse == "RightButton" then UI:CyclePlayerRole(self) end
-    end)
-    return b
+local function Paint(b, key)
+    local c = STATUS_COLORS[key] or STATUS_COLORS.NONE
+    b.bg:SetColorTexture(c[1], c[2], c[3], 0.85)
 end
 
-local function CreateClassRow(i)
-    local b = MakeRowBase("CBB_ClassRow" .. i, true)
-    b.bg:SetColorTexture(1, 1, 1, 0.06)
-    b.icon:SetPoint("LEFT", b, "LEFT", 1, 0)
-    b.classIcon = b:CreateTexture(nil, "ARTWORK")
-    b.classIcon:SetSize(14, 14)
-    b.classIcon:SetPoint("LEFT", b.icon, "RIGHT", 4, 0)
-    b.name:SetPoint("LEFT", b.classIcon, "RIGHT", 4, 0)
-    b.name:SetWidth(120)
-    b.toggle = CreateFrame("Button", nil, b)
-    b.toggle:SetSize(14, 14)
-    b.toggle:SetPoint("RIGHT", b, "RIGHT", -2, 0)
-    b.toggle:SetScript("OnClick", function(self) UI:ToggleClass(self:GetParent()) end)
-    b.status:SetPoint("RIGHT", b.toggle, "LEFT", -3, 0)
-    b.status:SetWidth(80)
-    b:HookScript("OnEnter", function(self) UI:ClassTooltip(self) end)
-    b:HookScript("OnLeave", function() GameTooltip:Hide() end)
-    b:HookScript("OnMouseUp", function(self, mouse)
-        if mouse == "RightButton" then UI:CycleGreater(self, IsShiftKeyDown() and -1 or 1) end
-    end)
-    return b
+local function ClearSecure(b)
+    b:SetAttribute("type1", nil)
+    b:SetAttribute("spell1", nil)
+    b:SetAttribute("unit", nil)
 end
 
+local function SetSpell(b, spell, unit)
+    b:SetAttribute("type1", "spell")
+    b:SetAttribute("spell1", spell)
+    b:SetAttribute("unit", unit)
+end
+
+---------------------------------------------------------------------------
+-- creation
+---------------------------------------------------------------------------
 function UI:Create()
     if self.main then return end
     if InCombatLockdown() then return end -- retried on PLAYER_REGEN_ENABLED
 
-    local f = CreateFrame("Frame", "CBB_MainFrame", UIParent, "BackdropTemplate")
-    f:SetSize(WIDTH, HEADER_H + PAD * 2)
+    local f = CreateFrame("Frame", "CBB_MainFrame", UIParent)
+    f:SetSize(HANDLE + 2 + BTN_W, BTN_H)
     f:SetFrameStrata("MEDIUM")
     f:SetClampedToScreen(true)
     f:SetMovable(true)
-    f:EnableMouse(true)
-    f:RegisterForDrag("LeftButton")
-    f:SetScript("OnDragStart", function(s)
-        if not ns.opt.locked and not InCombatLockdown() then s:StartMoving() end
-    end)
-    f:SetScript("OnDragStop", function(s)
-        s:StopMovingOrSizing()
-        UI:SavePosition()
-    end)
-    if f.SetBackdrop then
-        f:SetBackdrop({
-            bgFile = "Interface\\Tooltips\\UI-Tooltip-Background",
-            edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-            tile = true, tileSize = 16, edgeSize = 12,
-            insets = { left = 3, right = 3, top = 3, bottom = 3 },
-        })
-        f:SetBackdropColor(0, 0, 0, 0.8)
-        f:SetBackdropBorderColor(0.55, 0.55, 0.55, 1)
-    end
     self.main = f
     self:RestorePosition()
 
-    -- smart button (also bindable: Key Bindings > AddOns)
-    local sb = CreateFrame("Button", "CBB_SmartButton", f, "SecureActionButtonTemplate")
-    sb:SetSize(22, 22)
-    sb:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + 1, -PAD - 1)
-    sb:RegisterForClicks("AnyUp", "AnyDown")
-    sb.icon = sb:CreateTexture(nil, "ARTWORK")
-    sb.icon:SetAllPoints()
-    sb.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-    local sbhl = sb:CreateTexture(nil, "HIGHLIGHT")
-    sbhl:SetAllPoints()
-    sbhl:SetColorTexture(1, 1, 1, 0.2)
+    -- Settings button: click to open the settings, drag to move the bar.
+    local h = CreateFrame("Button", "CBB_SettingsButton", f)
+    h:SetSize(HANDLE, HANDLE)
+    h:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -(BTN_H - HANDLE) / 2)
+    h:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
+    h:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    h:RegisterForDrag("LeftButton")
+    h:SetScript("OnDragStart", function()
+        if not ns.opt.locked and not InCombatLockdown() then f:StartMoving() end
+    end)
+    h:SetScript("OnDragStop", function()
+        f:StopMovingOrSizing()
+        UI:SavePosition()
+    end)
+    h:SetScript("OnClick", function() if ns.Config then ns.Config:Toggle() end end)
+    h:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Camelus' Better Blessings")
+        GameTooltip:AddLine("Click: settings", 0.5, 0.8, 1)
+        GameTooltip:AddLine(ns.opt.locked and "Bar is locked (unlock in Options)." or "Drag: move the bar", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    h:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.handle = h
+
+    -- Smart button (also bindable: Key Bindings > AddOns)
+    local sb = MakeButton("CBB_SmartButton", f, BTN_W)
+    sb:SetPoint("TOPLEFT", f, "TOPLEFT", HANDLE + 2, 0)
+    sb.text:SetFontObject("GameFontHighlightSmall")
+    sb.text:ClearAllPoints()
+    sb.text:SetPoint("LEFT", sb.icon1, "RIGHT", 4, 0)
+    sb.text:SetPoint("RIGHT", sb, "RIGHT", -5, 0)
+    sb.text:SetJustifyH("LEFT")
+    if sb.text.SetWordWrap then sb.text:SetWordWrap(false) end
     sb:SetScript("PreClick", function() UI:PrepareSmart() end)
     sb:HookScript("OnEnter", function(self) UI:SmartTooltip(self) end)
     sb:HookScript("OnLeave", function() GameTooltip:Hide() end)
     self.smart = sb
 
-    local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("LEFT", sb, "RIGHT", 6, 0)
-    title:SetText("Better Blessings")
-    self.title = title
-    local count = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    count:SetPoint("LEFT", title, "RIGHT", 6, 0)
-    self.count = count
-
-    local cfg = CreateFrame("Button", nil, f)
-    cfg:SetSize(18, 18)
-    cfg:SetPoint("TOPRIGHT", f, "TOPRIGHT", -PAD - 2, -PAD - 3)
-    cfg:SetNormalTexture("Interface\\Buttons\\UI-OptionsButton")
-    cfg:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
-    cfg:SetScript("OnClick", function() if ns.Config then ns.Config:Toggle() end end)
-    cfg:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:AddLine("Assignments & options")
-        GameTooltip:AddLine("/cbb for commands", 0.8, 0.8, 0.8)
-        GameTooltip:Show()
-    end)
-    cfg:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
     local footer = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     footer:SetJustifyH("LEFT")
-    footer:SetWidth(INNER_W - 4)
+    footer:SetWidth(BTN_W + FLY_W)
     footer:SetTextColor(1, 0.55, 0.3)
     self.footer = footer
 
-    local ov = CreateFrame("Frame", nil, f)
-    ov:SetAllPoints()
-    ov:SetFrameLevel(f:GetFrameLevel() + 30)
-    ov:EnableMouse(false)
-    ov.tex = ov:CreateTexture(nil, "OVERLAY")
-    ov.tex:SetPoint("TOPLEFT", f, "TOPLEFT", 3, -HEADER_H - PAD)
-    ov.tex:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -3, 3)
-    ov.tex:SetColorTexture(0, 0, 0, 0.5)
-    ov.text = ov:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    ov.text:SetPoint("TOP", ov.tex, "TOP", 0, -4)
-    ov.text:SetText("|cffff8040In combat - frozen until combat ends|r")
-    ov:Hide()
-    self.overlay = ov
-
-    self.playerRows, self.classRows = {}, {}
-
+    self.classButtons = {}
     self:ApplyScale()
     self:Layout()
     self:UpdateVisibility()
+end
+
+local function CreatePlayerButton(flyout, i)
+    local b = MakeButton(nil, flyout, FLY_W)
+    b.role = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    b.role:SetPoint("LEFT", b.icon1, "RIGHT", 4, 0)
+    b.role:SetWidth(34)
+    b.role:SetJustifyH("LEFT")
+    b.name = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.name:SetPoint("LEFT", b.role, "RIGHT", 2, 0)
+    b.name:SetWidth(78)
+    b.name:SetJustifyH("LEFT")
+    if b.name.SetWordWrap then b.name:SetWordWrap(false) end
+    b.text:SetFontObject("GameFontHighlightSmall")
+    b.camp = {}
+    for j = 1, MAX_CAMP_ICONS do
+        local t = b:CreateTexture(nil, "OVERLAY")
+        t:SetSize(14, 14)
+        t:SetPoint("RIGHT", b, "RIGHT", -40 - (j - 1) * 15, 0)
+        t:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        t:Hide()
+        b.camp[j] = t
+    end
+    b:SetPoint("TOPLEFT", flyout, "TOPLEFT", 0, -(i - 1) * (BTN_H + GAP))
+    b:HookScript("OnEnter", function(self)
+        UI:CancelFlyoutClose()
+        UI:PlayerTooltip(self)
+    end)
+    b:HookScript("OnLeave", function()
+        GameTooltip:Hide()
+        UI:ScheduleFlyoutClose()
+    end)
+    return b
+end
+
+local function CreateClassButton(i)
+    local b = MakeButton("CBB_ClassButton" .. i, UI.main, BTN_W)
+    b.icon2 = b:CreateTexture(nil, "ARTWORK")
+    b.icon2:SetSize(ICON, ICON)
+    b.icon2:SetPoint("LEFT", b.icon1, "RIGHT", 3, 0)
+    b.icon2:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    b.blockedMark = b:CreateTexture(nil, "OVERLAY")
+    b.blockedMark:SetAllPoints(b.icon2)
+    b.blockedMark:SetTexture(BLOCKED_ICON)
+    b.blockedMark:Hide()
+    b.campMark = b:CreateTexture(nil, "OVERLAY")
+    b.campMark:SetSize(12, 12)
+    b.campMark:SetPoint("TOPRIGHT", b.icon2, "TOPRIGHT", 7, 4)
+    b.campMark:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    b.campMark:Hide()
+
+    local fly = CreateFrame("Frame", nil, b)
+    fly:SetPoint("TOPLEFT", b, "TOPRIGHT", GAP, 0)
+    fly:SetSize(FLY_W, BTN_H)
+    fly:Hide()
+    fly.buttons = {}
+    b.flyout = fly
+
+    b:HookScript("OnEnter", function(self)
+        UI:OpenFlyout(self)
+        UI:ClassTooltip(self)
+    end)
+    b:HookScript("OnLeave", function()
+        GameTooltip:Hide()
+        UI:ScheduleFlyoutClose()
+    end)
+    return b
+end
+
+---------------------------------------------------------------------------
+-- flyouts (opened by hovering a class button, out of combat)
+---------------------------------------------------------------------------
+function UI:OpenFlyout(cb)
+    if InCombatLockdown() or not cb.class then return end
+    self:CancelFlyoutClose()
+    for _, other in ipairs(self.classButtons) do
+        if other ~= cb and other.flyout:IsShown() then other.flyout:Hide() end
+    end
+    if (cb.numPlayers or 0) > 0 then cb.flyout:Show() end
+    self.openClass = cb
+end
+
+function UI:CancelFlyoutClose()
+    self.closeToken = (self.closeToken or 0) + 1
+end
+
+function UI:ScheduleFlyoutClose()
+    self.closeToken = (self.closeToken or 0) + 1
+    local token = self.closeToken
+    C_Timer.After(0.2, function()
+        if token ~= self.closeToken then return end
+        local cb = self.openClass
+        if not cb then return end
+        if cb:IsMouseOver() or (cb.flyout:IsShown() and cb.flyout:IsMouseOver()) then return end
+        self:CloseFlyouts()
+    end)
+end
+
+function UI:CloseFlyouts()
+    if InCombatLockdown() then return end
+    for _, cb in ipairs(self.classButtons or {}) do cb.flyout:Hide() end
+    self.openClass = nil
 end
 
 ---------------------------------------------------------------------------
@@ -295,83 +359,58 @@ function UI:UpdateVisibility()
 end
 
 function UI:SetCombat(inCombat)
-    if self.overlay then self.overlay:SetShown(inCombat) end
+    self.inCombat = inCombat
+    if self.smart then self:RefreshSmartVisual() end
 end
 
 ---------------------------------------------------------------------------
 -- layout (out of combat only)
 ---------------------------------------------------------------------------
-local function ClearSecure(b)
-    b:SetAttribute("type1", nil)
-    b:SetAttribute("spell1", nil)
-    b:SetAttribute("unit", nil)
-end
-
-local function CollapseKey(class)
-    return (IsInRaid() and "R:" or "P:") .. class
-end
-
-function UI:IsCollapsed(class)
-    local v = ns.db.collapsed[CollapseKey(class)]
-    if v == nil then return IsInRaid() and ns.opt.collapseRaid or false end
-    return v
-end
-
-function UI:ToggleClass(row)
-    if not row.class then return end
-    if InCombatLockdown() then ns.Print("cannot change the bar layout in combat.") return end
-    ns.db.collapsed[CollapseKey(row.class)] = not self:IsCollapsed(row.class)
-    self:Layout()
-end
-
 function UI:Layout()
     if not self.main then return end
     if InCombatLockdown() then ns.needLayout = true return end
     ns.needLayout = false
 
-    local y = -(PAD + HEADER_H)
-    local ci, pi = 0, 0
+    -- The smart button works from its key binding even while hidden.
+    local top = ns.opt.showSmart and 1 or 0
+    self.smart:SetShown(ns.opt.showSmart and true or false)
+    local ci = 0
     for _, class in ipairs(ns.CLASS_ORDER) do
         local members = ns.ClassMembers(class)
         if #members > 0 then
             ci = ci + 1
-            local row = self.classRows[ci] or CreateClassRow(ci)
-            self.classRows[ci] = row
-            row.class = class
-            row:ClearAllPoints()
-            row:SetPoint("TOPLEFT", self.main, "TOPLEFT", PAD, y)
-            row:Show()
-            y = y - ROW_H - 1
-            local collapsed = self:IsCollapsed(class)
-            row.toggle:SetNormalTexture(collapsed and "Interface\\Buttons\\UI-PlusButton-Up" or "Interface\\Buttons\\UI-MinusButton-Up")
-            if not collapsed then
-                for _, st in ipairs(members) do
-                    pi = pi + 1
-                    local pr = self.playerRows[pi] or CreatePlayerRow(pi)
-                    self.playerRows[pi] = pr
-                    pr.guid = st.guid
-                    pr:ClearAllPoints()
-                    pr:SetPoint("TOPLEFT", self.main, "TOPLEFT", PAD, y)
-                    pr:Show()
-                    y = y - ROW_H - 1
-                end
+            local cb = self.classButtons[ci] or CreateClassButton(ci)
+            self.classButtons[ci] = cb
+            cb.class = class
+            cb:ClearAllPoints()
+            cb:SetPoint("TOPLEFT", self.main, "TOPLEFT", HANDLE + 2, -(ci - 1 + top) * (BTN_H + GAP))
+            cb:Show()
+            for pi, st in ipairs(members) do
+                local pb = cb.flyout.buttons[pi] or CreatePlayerButton(cb.flyout, pi)
+                cb.flyout.buttons[pi] = pb
+                pb.guid = st.guid
+                pb:Show()
             end
+            for pi = #members + 1, #cb.flyout.buttons do
+                local pb = cb.flyout.buttons[pi]
+                pb.guid = nil
+                ClearSecure(pb)
+                pb:Hide()
+            end
+            cb.numPlayers = #members
+            cb.flyout:SetHeight(#members * (BTN_H + GAP) - GAP)
         end
     end
-    for i = ci + 1, #self.classRows do
-        local r = self.classRows[i]
-        r.class = nil
-        ClearSecure(r)
-        r:Hide()
+    for i = ci + 1, #self.classButtons do
+        local cb = self.classButtons[i]
+        cb.class, cb.numPlayers = nil, 0
+        ClearSecure(cb)
+        for _, pb in ipairs(cb.flyout.buttons) do pb.guid = nil ClearSecure(pb) pb:Hide() end
+        cb.flyout:Hide()
+        cb:Hide()
     end
-    for i = pi + 1, #self.playerRows do
-        local r = self.playerRows[i]
-        r.guid = nil
-        ClearSecure(r)
-        r:Hide()
-    end
-    self.numClassRows, self.numPlayerRows = ci, pi
-    self.contentBottom = y
+    self.numClasses = ci
+    self.main:SetHeight(math.max(1, ci + top) * (BTN_H + GAP) - GAP)
     self:UpdateVisibility()
     self:UpdateFooter()
     self:Refresh()
@@ -379,88 +418,62 @@ end
 
 function UI:UpdateFooter()
     if not self.main then return end
-    local text
-    if ns.targetWarning then
-        text = ns.targetWarning
-    elseif #ns.order == 0 then
-        text = "|cffaaaaaaNo group members.|r"
-    end
-    local y = self.contentBottom or -(PAD + HEADER_H)
+    local text = ns.targetWarning
     self.footer:ClearAllPoints()
-    self.footer:SetPoint("TOPLEFT", self.main, "TOPLEFT", PAD + 2, y - 2)
+    self.footer:SetPoint("TOPLEFT", self.main, "BOTTOMLEFT", HANDLE + 4, -3)
     self.footer:SetText(text or "")
     self.footer:SetShown(text ~= nil)
-    if InCombatLockdown() then return end
-    local h = -y + PAD
-    if text then h = h + (self.footer:GetStringHeight() or 12) + 4 end
-    self.main:SetHeight(h)
 end
 
 ---------------------------------------------------------------------------
 -- refresh (visuals any time, secure attributes only out of combat)
 ---------------------------------------------------------------------------
-local function PaintBg(row, key, alpha)
-    local c = STATUS_COLORS[key] or STATUS_COLORS.NONE
-    row.bg:SetColorTexture(c[1], c[2], c[3], alpha or 0.35)
-end
-
-function UI:RefreshPlayerRow(row, canSet)
-    local st = row.guid and ns.units[row.guid]
-    if not st or not st.choice then
-        row.name:SetText("?")
-        if canSet then ClearSecure(row) end
-        return
-    end
-    local c = st.choice
-    local colorKey, label = c.status, ""
-    if not st.connected then
-        colorKey, label = "FAR", "offline"
-    elseif st.dead then
-        colorKey, label = "FAR", "dead"
-    elseif st.isPending then
-        colorKey, label = "PENDING", "..."
-    elseif c.status == "OK" then
-        label = c.remaining and Logic.FormatTime(c.remaining) or "ok"
+local function PlayerStatus(st)
+    local c = st.choice or { status = "NONE" }
+    if not st.connected then return "FAR", "offline" end
+    if st.dead then return "FAR", "dead" end
+    if st.isPending then return "PENDING", "..." end
+    local key, label = c.status, ""
+    if c.status == "OK" then
+        label = c.remaining and Logic.FormatTime(c.remaining) or ""
     elseif c.status == "REFRESH" then
         label = Logic.FormatTime(c.remaining)
     elseif c.status == "MISSING" then
-        label = "MISSING"
+        label = "!"
     elseif c.status == "SWAP" then
         label = "swap"
     elseif c.status == "BLOCKED" then
-        label = "blocked"
-    else
-        label = "-"
+        label = "camp"
     end
-    if Logic.NEEDS_CAST[c.status] and st.connected and not st.dead and not st.inRange then
-        colorKey, label = "FAR", "range"
+    if Logic.NEEDS_CAST[c.status] and not st.inRange then key, label = "FAR", "range" end
+    return key, label
+end
+
+function UI:RefreshPlayerButton(b, canSet)
+    local st = b.guid and ns.units[b.guid]
+    if not st or not st.choice then
+        b.name:SetText("?")
+        if canSet then ClearSecure(b) end
+        return
     end
-    PaintBg(row, colorKey)
-    row.status:SetText(label)
-    row.icon:SetTexture(c.blessing and ns.BlessingTexture(c.blessing, false) or BLOCKED_ICON)
-    row.icon:SetAlpha(c.status == "OK" and 0.7 or 1)
-    row.role:SetText(RoleText(st.role, st.roleSource))
-    local r, g, b = ClassColor(st.class)
-    row.name:SetText(ShortName(st.name) .. (st.stale and "|cffaaaaaa*|r" or ""))
-    row.name:SetTextColor(r, g, b)
+    local c = st.choice
+    local key, label = PlayerStatus(st)
+    Paint(b, key)
+    b.text:SetText(label)
+    b.icon1:SetTexture(c.blessing and ns.BlessingTexture(c.blessing, false) or BLOCKED_ICON)
+    b.role:SetText(RoleText(st.role, st.roleSource, st.class))
+    b.name:SetText(ShortName(st.name) .. (st.stale and "|cffaaaaaa*|r" or ""))
+    b.name:SetTextColor(ClassColor(st.class))
     local camps = st.aura and st.aura.camps or {}
     for j = 1, MAX_CAMP_ICONS do
-        local t, camp = row.camp[j], camps[j]
-        if camp then
-            t:SetTexture(camp.icon or QUESTION)
-            t:Show()
-        else
-            t:Hide()
-        end
+        local t, camp = b.camp[j], camps[j]
+        if camp then t:SetTexture(camp.icon or QUESTION) t:Show() else t:Hide() end
     end
     if canSet then
-        row:SetAttribute("unit", st.unit)
         if c.blessing and st.connected and not st.dead then
-            row:SetAttribute("type1", "spell")
-            row:SetAttribute("spell1", ns.BlessingSpell(c.blessing, false))
+            SetSpell(b, ns.BlessingSpell(c.blessing, false), st.unit)
         else
-            row:SetAttribute("type1", nil)
-            row:SetAttribute("spell1", nil)
+            ClearSecure(b)
         end
     end
 end
@@ -469,71 +482,90 @@ end
 function UI:GreaterInfo(class)
     local g = ns.GetGreater(class)
     local members = ns.ClassMembers(class)
-    local info = { blessing = g, members = members, have = 0, target = nil, replaces = {}, notIdeal = {} }
+    local info = { blessing = g, members = members, have = 0, target = nil, replaces = {}, notIdeal = {},
+                   need = 0, needInRange = 0, refresh = 0, anyCamp = nil }
     local list = {}
     for _, st in ipairs(members) do
         list[#list + 1] = { name = ShortName(st.name), conflicts = st.conflicts }
         if g and st.aura and st.aura.blessings[g] then info.have = info.have + 1 end
         if not info.target and st.connected and not st.dead and st.inRange then info.target = st end
         if g and st.mine and st.mine.type ~= g then info.replaces[#info.replaces + 1] = ShortName(st.name) end
-        if g and st.choice and st.choice.blessing and st.choice.blessing ~= g then
-            info.notIdeal[#info.notIdeal + 1] = string.format("%s (wants %s)", ShortName(st.name), BlessingShort(st.choice.blessing))
+        local c = st.choice
+        if g and c and c.blessing and c.blessing ~= g then
+            info.notIdeal[#info.notIdeal + 1] = string.format("%s (wants %s)", ShortName(st.name), BlessingShort(c.blessing))
         end
+        if c and Logic.NEEDS_CAST[c.status] and st.connected and not st.dead and not st.isPending then
+            info.need = info.need + 1
+            if st.inRange then info.needInRange = info.needInRange + 1 end
+            if c.status == "REFRESH" then info.refresh = info.refresh + 1 end
+        end
+        local camp = st.aura and st.aura.camps and st.aura.camps[1]
+        if camp and not info.anyCamp then info.anyCamp = camp end
     end
     info.conflicts = Logic.GreaterConflicts(g, list)
-    info.known = g and ns.BLESSINGS[g].greaterKnown or false
+    info.known = g and ns.BLESSINGS[g] and ns.BLESSINGS[g].greaterKnown or false
     info.blocked = g and ns.opt.protectGreater and #info.conflicts > 0 or false
     return info
 end
 
-function UI:RefreshClassRow(row, canSet)
-    local class = row.class
+function UI:RefreshClassButton(cb, canSet)
+    local class = cb.class
     if not class then return end
     local info = self:GreaterInfo(class)
-    local r, g, b = ClassColor(class)
-    SetClassIcon(row.classIcon, class)
-    row.name:SetText(string.format("%s (%d)", ClassLabel(class), #info.members))
-    row.name:SetTextColor(r, g, b)
-    row.icon:SetTexture(info.blessing and ns.BlessingTexture(info.blessing, true) or QUESTION)
-    row.icon:SetDesaturated((not info.blessing or info.blocked or not info.known) and true or false)
-    local label
-    if not info.blessing then
-        label = "|cffaaaaaano greater|r"
-    elseif info.blocked then
-        label = "|cffd080ffblocked|r"
-    elseif not info.known then
-        label = "|cffaaaaaanot learned|r"
-    elseif not info.target then
-        label = "|cffaaaaaaout of range|r"
+    SetClassIcon(cb.icon1, class)
+    cb.icon2:SetTexture(info.blessing and ns.BlessingTexture(info.blessing, true) or QUESTION)
+    cb.icon2:SetDesaturated((not info.blessing or info.blocked or not info.known) and true or false)
+    cb.blockedMark:SetShown(info.blocked and true or false)
+    if info.anyCamp then
+        cb.campMark:SetTexture(info.anyCamp.icon or QUESTION)
+        cb.campMark:Show()
     else
-        label = string.format("%s %d/%d", BlessingShort(info.blessing), info.have, #info.members)
+        cb.campMark:Hide()
     end
-    row.status:SetText(label)
+    -- colour = the class's single-blessing state (that is what dungeons use)
+    local key
+    if info.needInRange > info.refresh then key = "MISSING"
+    elseif info.needInRange > 0 then key = "REFRESH"
+    elseif info.need > 0 then key = "FAR"
+    else key = "OK" end
+    Paint(cb, key)
+    cb.text:SetText("")
+    for _, pb in ipairs(cb.flyout.buttons) do
+        if pb.guid then self:RefreshPlayerButton(pb, canSet) end
+    end
     if canSet then
         if info.blessing and info.known and not info.blocked and info.target then
-            row:SetAttribute("type1", "spell")
-            row:SetAttribute("spell1", ns.BlessingSpell(info.blessing, true))
-            row:SetAttribute("unit", info.target.unit)
+            SetSpell(cb, ns.BlessingSpell(info.blessing, true), info.target.unit)
         else
-            ClearSecure(row)
+            ClearSecure(cb)
         end
     end
+end
+
+function UI:RefreshSmartVisual()
+    local sb, t = self.smart, self.smart.target
+    if self.inCombat then
+        Paint(sb, "NONE")
+        sb.text:SetText("|cffaaaaaaIn combat|r")
+    elseif t then
+        Paint(sb, t.choice.status == "REFRESH" and "REFRESH" or "MISSING")
+        local r, g, b = ClassColor(t.class)
+        sb.text:SetText(string.format("|cff%02x%02x%02x%s|r", r * 255, g * 255, b * 255, ShortName(t.name)))
+    else
+        Paint(sb, "OK")
+        sb.text:SetText("All set")
+    end
+    sb.icon1:SetTexture(t and ns.BlessingTexture(t.choice.blessing, false) or ns.BlessingTexture("KINGS", false))
+    sb.icon1:SetDesaturated(not t)
 end
 
 function UI:PrepareSmart()
     if not self.smart or InCombatLockdown() then return end
     local t = ns.NextSmartTarget()
     local sb = self.smart
-    if t then
-        sb:SetAttribute("type1", "spell")
-        sb:SetAttribute("spell1", ns.BlessingSpell(t.choice.blessing, false))
-        sb:SetAttribute("unit", t.unit)
-    else
-        ClearSecure(sb)
-    end
+    if t then SetSpell(sb, ns.BlessingSpell(t.choice.blessing, false), t.unit) else ClearSecure(sb) end
     sb.target = t
-    sb.icon:SetTexture(t and ns.BlessingTexture(t.choice.blessing, false) or ns.BlessingTexture("WISDOM", false))
-    sb.icon:SetDesaturated(not t)
+    self:RefreshSmartVisual()
 end
 
 function UI:Refresh()
@@ -543,38 +575,12 @@ function UI:Refresh()
         return
     end
     local canSet = not InCombatLockdown()
-    for i = 1, self.numClassRows or 0 do self:RefreshClassRow(self.classRows[i], canSet) end
-    for i = 1, self.numPlayerRows or 0 do self:RefreshPlayerRow(self.playerRows[i], canSet) end
-    local n = ns.CountNeeding()
-    self.count:SetText(n > 0 and string.format("|cffff6060%d need|r", n) or "|cff60ff60all set|r")
+    for i = 1, self.numClasses or 0 do self:RefreshClassButton(self.classButtons[i], canSet) end
     self:PrepareSmart()
 end
 
 ---------------------------------------------------------------------------
--- clicks that change settings
----------------------------------------------------------------------------
-function UI:CyclePlayerRole(row)
-    local st = row.guid and ns.units[row.guid]
-    if not st then return end
-    local new = Logic.CycleRole(st.class, ns.db.overrides[st.name])
-    ns.db.overrides[st.name] = new
-    ns.Print("%s: %s", ShortName(st.name), new and ns.ROLE_INFO[new].label or "automatic role")
-    if InCombatLockdown() then ns.Print("the change applies when combat ends.") end
-    ns.RequestUpdate()
-    if GameTooltip:GetOwner() == row then self:PlayerTooltip(row) end
-end
-
-function UI:CycleGreater(row, dir)
-    if not row.class then return end
-    ns.db.greater[row.class] = Logic.CycleBlessing(ns.GetGreater(row.class), dir, true)
-    if InCombatLockdown() then ns.Print("the change applies when combat ends.") end
-    ns.RequestUpdate()
-    if ns.Config then ns.Config:Refresh() end
-    if GameTooltip:GetOwner() == row then self:ClassTooltip(row) end
-end
-
----------------------------------------------------------------------------
--- tooltips
+-- tooltips (information only - nothing on the bar changes settings)
 ---------------------------------------------------------------------------
 local SKIP_TEXT = {
     unknown = "you have not learned it",
@@ -582,17 +588,15 @@ local SKIP_TEXT = {
     taken = "already given by %s",
 }
 
-function UI:PlayerTooltip(row)
-    local st = row.guid and ns.units[row.guid]
+function UI:PlayerTooltip(b)
+    local st = b.guid and ns.units[b.guid]
     if not st then return end
     local tt = GameTooltip
-    tt:SetOwner(row, "ANCHOR_RIGHT")
-    local r, g, b = ClassColor(st.class)
-    tt:AddLine(st.name, r, g, b)
+    tt:SetOwner(b, "ANCHOR_RIGHT")
+    tt:AddLine(st.name, ClassColor(st.class))
     local role = ns.ROLE_INFO[st.role]
     tt:AddDoubleLine("Role", string.format("%s (%s)", role and role.label or "?", ROLE_SOURCE_TEXT[st.roleSource] or "?"), 0.8, 0.8, 0.8, 1, 1, 1)
     if st.talentDetail then tt:AddDoubleLine("Talents", st.talentDetail, 0.8, 0.8, 0.8, 1, 1, 1) end
-    if st.groupRole and st.groupRole ~= "NONE" then tt:AddDoubleLine("Group role", st.groupRole, 0.8, 0.8, 0.8, 1, 1, 1) end
 
     local now = GetTime()
     local aura = st.aura or { blessings = {}, camps = {} }
@@ -620,8 +624,9 @@ function UI:PlayerTooltip(row)
     tt:AddLine(" ")
     local c = st.choice or { status = "NONE", skipped = {} }
     if c.blessing then
-        local statusText = ({ OK = "has it", REFRESH = "refresh soon", MISSING = "missing", SWAP = "replaces your " .. BlessingShort(st.mine and st.mine.type) })[c.status] or c.status
-        tt:AddDoubleLine("Click casts", (ns.BlessingSpell(c.blessing, false) or "?"), 1, 0.82, 0, 1, 1, 1)
+        local statusText = ({ OK = "has it", REFRESH = "refresh soon", MISSING = "missing",
+            SWAP = "replaces your " .. BlessingShort(st.mine and st.mine.type) })[c.status] or c.status
+        tt:AddDoubleLine("Click casts", ns.BlessingSpell(c.blessing, false) or "?", 1, 0.82, 0, 1, 1, 1)
         tt:AddDoubleLine(" ", statusText, 1, 1, 1, 0.8, 0.8, 0.8)
     elseif c.status == "BLOCKED" then
         tt:AddLine("Nothing to cast - every option would replace a camp buff.", 0.85, 0.5, 1, true)
@@ -631,53 +636,50 @@ function UI:PlayerTooltip(row)
     for _, s in ipairs(c.skipped or {}) do
         tt:AddLine(string.format("  skipped %s: %s", BlessingShort(s.blessing), string.format(SKIP_TEXT[s.reason] or s.reason, s.detail or "?")), 0.75, 0.75, 0.75)
     end
-    local prio = {}
-    for i = 1, ns.MAX_PRIORITY do
-        if st.priority and st.priority[i] then prio[#prio + 1] = BlessingShort(st.priority[i]) end
-    end
-    tt:AddLine("Priority: " .. table.concat(prio, " > "), 0.6, 0.6, 0.6)
     if st.stale then tt:AddLine("* buff info is from before combat", 0.6, 0.6, 0.6) end
-    tt:AddLine(" ")
-    tt:AddLine("Left-click: cast   Right-click: change role", 0.5, 0.8, 1)
+    tt:AddLine("Roles and priorities: /cbb config", 0.5, 0.8, 1)
     tt:Show()
 end
 
-function UI:ClassTooltip(row)
-    if not row.class then return end
-    local info = self:GreaterInfo(row.class)
+function UI:ClassTooltip(cb)
+    if not cb.class then return end
+    local info = self:GreaterInfo(cb.class)
     local tt = GameTooltip
-    tt:SetOwner(row, "ANCHOR_RIGHT")
-    tt:AddLine(ClassLabel(row.class) .. " - Greater Blessing", ClassColor(row.class))
-    tt:AddDoubleLine("Assigned", info.blessing and ns.BlessingSpell(info.blessing, true) or "none", 0.8, 0.8, 0.8, 1, 1, 1)
+    tt:SetOwner(cb, "ANCHOR_LEFT")
+    tt:AddLine(ClassLabel(cb.class), ClassColor(cb.class))
+    tt:AddDoubleLine("Click", info.blessing and ns.BlessingSpell(info.blessing, true) or "no Greater Blessing set", 0.8, 0.8, 0.8, 1, 1, 1)
     if info.blessing then
-        tt:AddDoubleLine("Players with it", string.format("%d / %d", info.have, #info.members), 0.8, 0.8, 0.8, 1, 1, 1)
+        tt:AddDoubleLine("Have it", string.format("%d / %d", info.have, #info.members), 0.8, 0.8, 0.8, 1, 1, 1)
+    end
+    if info.need > 0 then
+        tt:AddDoubleLine("Need a single blessing", tostring(info.need), 0.8, 0.8, 0.8, 1, 0.5, 0.5)
     end
     if #info.conflicts > 0 then
         tt:AddLine(" ")
         tt:AddLine(info.blocked and "BLOCKED - it would replace:" or "Warning - it would replace:", 0.85, 0.5, 1)
         for _, cf in ipairs(info.conflicts) do tt:AddLine(string.format("  %s's %s", cf.name, cf.camp), 1, 1, 1) end
-        tt:AddLine("Use the single blessings below instead.", 0.8, 0.8, 0.8)
+        tt:AddLine("Use the single blessings instead.", 0.8, 0.8, 0.8)
     end
     if #info.replaces > 0 then
-        tt:AddLine(" ")
         tt:AddLine("Replaces your single blessing on: " .. table.concat(info.replaces, ", "), 1, 0.6, 0.3, true)
     end
     if #info.notIdeal > 0 then
         tt:AddLine("Role assignments differ: " .. table.concat(info.notIdeal, ", "), 0.8, 0.8, 0.8, true)
     end
     if info.blessing and not info.known then tt:AddLine("You have not learned this Greater Blessing.", 0.7, 0.7, 0.7) end
-    tt:AddLine(" ")
-    tt:AddLine("Left-click: cast   Right-click: next blessing   Shift-right: previous", 0.5, 0.8, 1, true)
+    if InCombatLockdown() then tt:AddLine("In combat: player list opens after combat.", 0.6, 0.6, 0.6) end
     tt:Show()
 end
 
 function UI:SmartTooltip(btn)
     local tt = GameTooltip
-    tt:SetOwner(btn, "ANCHOR_RIGHT")
+    tt:SetOwner(btn, "ANCHOR_LEFT")
     tt:AddLine("Smart blessing")
     local t = btn.target
     if t then
         tt:AddDoubleLine("Next", string.format("%s on %s", BlessingShort(t.choice.blessing), ShortName(t.name)), 0.8, 0.8, 0.8, 1, 1, 1)
+        local n = ns.CountNeeding()
+        if n > 1 then tt:AddDoubleLine("Still needing", tostring(n), 0.8, 0.8, 0.8, 1, 0.5, 0.5) end
     else
         tt:AddLine("Nobody in range needs a blessing.", 0.6, 1, 0.6)
     end

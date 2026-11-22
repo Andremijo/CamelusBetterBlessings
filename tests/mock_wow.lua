@@ -15,7 +15,9 @@ local function newObject(kind, name)
     return setmetatable(o, { __index = function(t, k)
         local f = M.methods[k]
         if f then return f end
-        return function() end
+        -- WoW widget methods are CamelCase; lowercase keys are addon fields (nil until set)
+        if type(k) == "string" and k:match("^%u") then return function() end end
+        return nil
     end })
 end
 
@@ -46,6 +48,7 @@ M.methods = {
     CreateTexture = function(self) return newObject("Texture") end,
     CreateFontString = function(self) return newObject("FontString") end,
     SetAtlas = function() end,
+    SetColorTexture = function(self, r, g, b, a) self._color = { r, g, b, a } end,
 }
 
 function M.install()
