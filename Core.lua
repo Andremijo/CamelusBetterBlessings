@@ -597,16 +597,22 @@ function ns.EvaluateUnit(st)
 
     local now = GetTime()
     local aura = st.aura or { blessings = {}, camps = {} }
-    local mine, taken = nil, {}
-    for key, info in pairs(aura.blessings) do
-        if info.mine then
-            mine = { type = key, remaining = info.expires and (info.expires - now) or nil, greater = info.greater }
-        else
-            taken[key] = info.caster
+    -- Every blessing of mine on this player: a Greater and a single blessing
+    -- from the same paladin can both be on one player on WoW Forever.
+    local mineAll, mine, taken = {}, nil, {}
+    for _, key in ipairs(ns.BLESSING_ORDER) do
+        local info = aura.blessings[key]
+        if info then
+            if info.mine then
+                mineAll[key] = { remaining = info.expires and (info.expires - now) or nil, greater = info.greater }
+                mine = mine or { type = key, remaining = mineAll[key].remaining, greater = info.greater }
+            else
+                taken[key] = info.caster
+            end
         end
     end
     st.conflicts = Logic.ConflictMap(aura.camps)
-    st.mine = mine
+    st.mine, st.mineAll = mine, mineAll
     st.priority = Logic.GetPriority(ns.db.assign, st.class, st.role)
     st.ppAssigned = nil
     if ns.PP then
@@ -623,7 +629,7 @@ function ns.EvaluateUnit(st)
         known = ns.known,
         conflicts = st.conflicts,
         taken = taken,
-        mine = mine,
+        mineAll = mineAll,
         protect = ns.opt.protectCamp,
         respectOthers = ns.opt.respectOthers,
         threshold = (ns.opt.refreshMinutes or 5) * 60,

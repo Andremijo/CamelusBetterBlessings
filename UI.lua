@@ -501,12 +501,23 @@ end
 -- refresh (visuals any time, secure attributes only out of combat)
 ---------------------------------------------------------------------------
 -- Seconds left on MY blessing on this player (any type), or nil.
-local function MyRemaining(st)
+-- Seconds left on my blessing of this type on the player; without a type,
+-- the shortest of my blessings on them. nil if none.
+local function MyRemaining(st, key)
     local now = GetTime()
-    for _, info in pairs(st and st.aura and st.aura.blessings or {}) do
-        if info.mine and info.expires then return math.max(0, info.expires - now) end
+    local blessings = st and st.aura and st.aura.blessings or {}
+    if key then
+        local info = blessings[key]
+        if info and info.mine and info.expires then return math.max(0, info.expires - now) end
     end
-    return nil
+    local least
+    for _, info in pairs(blessings) do
+        if info.mine and info.expires then
+            local left = math.max(0, info.expires - now)
+            if not least or left < least then least = left end
+        end
+    end
+    return least
 end
 UI.MyRemaining = MyRemaining
 
@@ -522,7 +533,7 @@ local function PlayerStatus(st)
     if st.isPending then return "PENDING", "..." end
     local key, label = c.status, ""
     if c.status == "OK" or c.status == "REFRESH" then
-        local left = MyRemaining(st) or c.remaining
+        local left = MyRemaining(st, c.blessing) or c.remaining
         label = left and (TimerColor(left) .. Logic.FormatClock(left) .. "|r") or ""
     elseif c.status == "MISSING" then
         label = "!"
@@ -584,7 +595,7 @@ function UI:GreaterInfo(class)
         list[#list + 1] = { name = ShortName(st.name), conflicts = st.conflicts }
         if g and st.aura and st.aura.blessings[g] then info.have = info.have + 1 end
         if not info.target and st.connected and not st.dead and st.inRange then info.target = st end
-        if g and st.mine and st.mine.type ~= g then info.replaces[#info.replaces + 1] = ShortName(st.name) end
+        if g and st.mineAll and next(st.mineAll) and not st.mineAll[g] then info.replaces[#info.replaces + 1] = ShortName(st.name) end
         local c = st.choice
         if g and c and c.blessing and c.blessing ~= g then
             info.notIdeal[#info.notIdeal + 1] = string.format("%s (wants %s)", ShortName(st.name), BlessingShort(c.blessing))
@@ -735,7 +746,7 @@ function UI:UpdateTimers()
             local st = pb.guid and ns.units[pb.guid]
             if st and st.choice and (st.choice.status == "OK" or st.choice.status == "REFRESH")
                 and st.connected and not st.dead and not st.isPending then
-                local left = MyRemaining(st)
+                local left = MyRemaining(st, st.choice.blessing)
                 if left then pb.text:SetText(TimerColor(left) .. Logic.FormatClock(left) .. "|r") end
             end
         end
@@ -801,7 +812,7 @@ function UI:PlayerTooltip(b)
     local c = st.choice or { status = "NONE", skipped = {} }
     if c.blessing then
         local statusText = ({ OK = "has it", REFRESH = "refresh soon", MISSING = "missing",
-            SWAP = "replaces your " .. BlessingShort(st.mine and st.mine.type) })[c.status] or c.status
+            SWAP = "you have " .. BlessingShort(st.mine and st.mine.type) .. ", not this" })[c.status] or c.status
         tt:AddDoubleLine("Click casts", ns.BlessingSpell(c.blessing, false) or "?", 1, 0.82, 0, 1, 1, 1)
         tt:AddDoubleLine(" ", statusText, 1, 1, 1, 0.8, 0.8, 0.8)
     elseif c.status == "BLOCKED" then
@@ -853,7 +864,7 @@ function UI:ClassTooltip(cb)
         tt:AddLine("Use the single blessings instead.", 0.8, 0.8, 0.8)
     end
     if #info.replaces > 0 then
-        tt:AddLine("Replaces your single blessing on: " .. table.concat(info.replaces, ", "), 1, 0.6, 0.3, true)
+        tt:AddLine("Has another blessing of yours: " .. table.concat(info.replaces, ", "), 0.8, 0.8, 0.8, true)
     end
     if #info.notIdeal > 0 then
         tt:AddLine("Role assignments differ: " .. table.concat(info.notIdeal, ", "), 0.8, 0.8, 0.8, true)

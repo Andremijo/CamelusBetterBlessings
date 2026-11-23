@@ -73,6 +73,15 @@ test("choose: my blessing ok / refresh / swap", function()
     eq(L.ChooseBlessing({ "MIGHT" }, { mine = { type = "MIGHT", remaining = 100 }, threshold = 300 }).status, "REFRESH")
     eq(L.ChooseBlessing({ "MIGHT" }, { mine = { type = "KINGS", remaining = 3000 }, threshold = 300 }).status, "SWAP")
 end)
+test("choose: a Greater and a single blessing of mine on the same player", function()
+    -- healer wants Wisdom; I gave both Greater Kings and Wisdom
+    local c = L.ChooseBlessing({ "WISDOM", "KINGS" }, {
+        mineAll = { KINGS = { remaining = 3000 }, WISDOM = { remaining = 2500 } }, threshold = 300 })
+    eq(c.blessing, "WISDOM") eq(c.status, "OK") eq(c.remaining, 2500)
+    -- only Greater Kings of mine: Wisdom is still missing ("swap")
+    c = L.ChooseBlessing({ "WISDOM", "KINGS" }, { mineAll = { KINGS = { remaining = 3000 } } })
+    eq(c.status, "SWAP")
+end)
 test("camp match by id and name", function()
     local list = ns.CAMP_BUFFS
     eq(L.MatchCampBuff("whatever", 1230098, list).key, "FISH_BOWL")
@@ -627,6 +636,24 @@ test("combat: buffs update live (Freedom replaces Kings mid-fight), buttons keep
     eq(rowFor("G-1")._attrs.spell1, "Blessing of Might")
     M.units.party1.auras = {}
     M.fire("UNIT_AURA", "party1") M.flush()
+end)
+test("bar: my Greater Kings + my Wisdom on a healer who wants Wisdom is green, not swap", function()
+    -- the in-game report: Paladin button red / "swap" although Wisdom was on
+    M.units.player.auras = {
+        M.aura("Greater Blessing of Kings", { mine = true, expires = M.now + 3580 }),
+        M.aura("Blessing of Wisdom", { mine = true, expires = M.now + 2700 }),
+    }
+    M.fire("UNIT_AURA", "player") M.flush()
+    local me = st("G-P")
+    eq(me.role, "HEALER")
+    eq(me.choice.blessing, "WISDOM")
+    eq(me.choice.status, "OK")
+    local pal = classRow("PALADIN")
+    assert(pal.bg._color[2] > pal.bg._color[1], "paladin button should be green")
+    -- the player's timer is the Wisdom one (45:00), not Kings
+    assert(rowFor("G-P").text._text:find("45:00", 1, true), rowFor("G-P").text._text)
+    M.units.player.auras = {}
+    M.fire("UNIT_AURA", "player") M.flush()
 end)
 test("bar: single-role classes have no '?' on their role", function()
     local rogue = rowFor("G-4")
