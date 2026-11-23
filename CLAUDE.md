@@ -55,7 +55,10 @@ Swedish. Reply in the language they write in.
   - Kings is baseline from level 20.
   - Salvation, Light and Sanctuary were removed from the game.
   - Blessings last 1 hour.
-  - Each paladin can only have one blessing per target. A new one replaces it.
+  - A **Greater and a single blessing from the same paladin can both be on one
+    player**, seen in game: my Greater Kings and my Wisdom on me. The addon
+    therefore looks at *all* my blessings on a player (`mineAll`). Don't assume
+    one blessing per paladin per target.
 - **Camp buffs** are *not* separate auras. A campfire gives one visible aura,
   **Camp Benefits** (spell `1229741`). Its tooltip has a line per active
   feature, like `Fish Bowl: ...`.

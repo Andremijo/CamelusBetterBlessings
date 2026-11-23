@@ -79,7 +79,10 @@ end
 --   known         : { KEY = true } blessings I can cast (nil = assume all)
 --   conflicts     : { KEY = "Fish Bowl" } blessings that would replace a camp buff on this player
 --   taken         : { KEY = "Otherpally" } blessings another paladin already gave this player
---   mine          : { type = KEY, remaining = seconds|nil } my current blessing on this player
+--   mineAll       : { KEY = { remaining = seconds|nil } } ALL my blessings on this
+--                   player (on WoW Forever a Greater and a single blessing from
+--                   the same paladin can sit on one player at the same time)
+--   mine          : { type = KEY, remaining = seconds|nil } older single form
 --   protect       : honour camp buffs (default true)
 --   respectOthers : honour other paladins' blessings (default true)
 --   threshold     : seconds; my blessing below this counts as needing a refresh
@@ -90,7 +93,12 @@ function Logic.ChooseBlessing(priority, ctx)
     local skipped = {}
     local campBlocked = false
     local seen = {}
-    local mine = ctx.mine
+    local mineAll = ctx.mineAll
+    if not mineAll then
+        mineAll = {}
+        if ctx.mine and ctx.mine.type then mineAll[ctx.mine.type] = { remaining = ctx.mine.remaining } end
+    end
+    local hasMine = next(mineAll) ~= nil
     for i = 1, ns.MAX_PRIORITY do
         local b = priority and priority[i]
         if b and ns.BLESSINGS[b] and not seen[b] then
@@ -100,18 +108,19 @@ function Logic.ChooseBlessing(priority, ctx)
             elseif ctx.protect ~= false and ctx.conflicts and ctx.conflicts[b] then
                 campBlocked = true
                 skipped[#skipped + 1] = { blessing = b, reason = "camp", detail = ctx.conflicts[b] }
-            elseif ctx.respectOthers ~= false and ctx.taken and ctx.taken[b] and not (mine and mine.type == b) then
+            elseif ctx.respectOthers ~= false and ctx.taken and ctx.taken[b] and not mineAll[b] then
                 skipped[#skipped + 1] = { blessing = b, reason = "taken", detail = ctx.taken[b] }
             else
                 local result = { blessing = b, rank = i, skipped = skipped }
-                if mine and mine.type == b then
-                    result.remaining = mine.remaining
-                    if mine.remaining and ctx.threshold and mine.remaining <= ctx.threshold then
+                local m = mineAll[b]
+                if m then
+                    result.remaining = m.remaining
+                    if m.remaining and ctx.threshold and m.remaining <= ctx.threshold then
                         result.status = "REFRESH"
                     else
                         result.status = "OK"
                     end
-                elseif mine and mine.type then
+                elseif hasMine then
                     result.status = "SWAP"
                 else
                     result.status = "MISSING"
